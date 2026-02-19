@@ -48,10 +48,11 @@ region_summary = (
     .reset_index()
 )
 
-# --- Завантаження GeoJSON ---
+# Завантаження GeoJSON
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
-
+st.write("Ключі properties у GeoJSON:")
+st.write(geojson_data["features"][0]["properties"])
 # --- Карта ---
 st.subheader("Карта розподілу кількості засобів")
 
