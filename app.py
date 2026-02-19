@@ -72,7 +72,6 @@ plotly>=5.16.0
 ```
 
 ppe-dashboard/
-│
 ├── app.py               # Головний файл Streamlit
 ├── requirements.txt     # Залежності
 ├── README.md            # Документація
