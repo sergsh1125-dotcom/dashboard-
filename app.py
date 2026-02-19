@@ -15,12 +15,6 @@ def load_data():
 
 df = load_data()
 
-# --- Завантаження GeoJSON ---
-with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
-    geojson_data = json.load(f)
-
-geo_names = [feature["properties"]["name"] for feature in geojson_data["features"]]
-
 # --- Перевірка колонок ---
 required_columns = ["region_name", "product_name", "year_of_manufacture", "quantity"]
 missing_columns = [col for col in required_columns if col not in df.columns]
@@ -28,19 +22,47 @@ if missing_columns:
     st.error(f"У CSV відсутні колонки: {missing_columns}")
     st.stop()
 
-# --- Автоматичне зіставлення CSV → GeoJSON ---
-# Якщо точного співпадіння немає, виведе список
+# --- Завантаження GeoJSON ---
+with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
+    geojson_data = json.load(f)
+
+# --- Словник CSV → GeoJSON (транслітеровані назви) ---
+region_name_map = {
+    "Автономна Республіка Крим": "Avtonomna Respublika Krym",
+    "Черкаська область": "Cherkaska",
+    "Чернігівська область": "Chernihivska",
+    "Чернівецька область": "Chernivetska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Донецька область": "Donetska",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Харківська область": "Kharkivska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Кіровоградська область": "Kirovohradska",
+    "Київська область": "Kyivska",
+    "Луганська область": "Luhanska",
+    "Львівська область": "Lvivska",
+    "Миколаївська область": "Mykolaivska",
+    "Одеська область": "Odeska",
+    "Полтавська область": "Poltavska",
+    "Рівненська область": "Rivnenska",
+    "Севастополь": "Sevastopilska",
+    "Сумська область": "Sumska",
+    "Тернопільська область": "Ternopilska",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Житомирська область": "Zhytomyrska",
+    "Київ": "Kyiv"
+}
+
+# --- Додаємо колонку для Plotly ---
 region_summary = df.groupby("region_name")["quantity"].sum().reset_index()
-region_summary["geojson_name"] = region_summary["region_name"].apply(
-    lambda x: x if x in geo_names else None
-)
-missing = region_summary[region_summary["geojson_name"].isna()]
-if not missing.empty:
-    st.warning("Ці регіони не знайдено у GeoJSON, додайте їх у мапу вручну:")
-    st.write(missing["region_name"].tolist())
+region_summary["geojson_name"] = region_summary["region_name"].map(region_name_map)
 
 # --- Додаємо відсутні регіони з нульовою кількістю ---
-for name in geo_names:
+for name in region_name_map.values():
     if name not in region_summary["geojson_name"].values:
         region_summary = pd.concat(
             [region_summary, pd.DataFrame({"region_name": [name], "quantity": [0], "geojson_name": [name]})],
@@ -67,14 +89,14 @@ st.dataframe(filtered_df, use_container_width=True)
 # --- Кольорова шкала ---
 max_quantity = region_summary["quantity"].max()
 colorscale = [
-    [0.0, "lightgray"],  # нулі
+    [0.0, "lightgray"],
     [0.01, "lightblue"],
     [0.5, "skyblue"],
     [0.8, "blue"],
-    [1.0, "red"]         # гарячі регіони
+    [1.0, "red"]
 ]
 
-# --- Створення карти ---
+# --- Карта ---
 st.subheader("Карта розподілу кількості засобів")
 fig = px.choropleth(
     region_summary,
