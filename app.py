@@ -15,46 +15,37 @@ def load_data():
 
 df = load_data()
 
+# --- Завантаження GeoJSON ---
+with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
+    geojson_data = json.load(f)
+
+geo_names = [feature["properties"]["name"] for feature in geojson_data["features"]]
+
 # --- Перевірка колонок ---
 required_columns = ["region_name", "product_name", "year_of_manufacture", "quantity"]
 missing_columns = [col for col in required_columns if col not in df.columns]
-
 if missing_columns:
     st.error(f"У CSV відсутні колонки: {missing_columns}")
-    st.write("Знайдені колонки у файлі:")
-    st.write(df.columns)
     st.stop()
 
-# --- Словник відповідності CSV → GeoJSON ---
-region_name_map = {
-    "Автономна Республіка Крим": "Avtonomna Respublika Krym",
-    "Черкаська область": "Cherkaska",
-    "Чернігівська область": "Chernihivska",
-    "Чернівецька область": "Chernivetska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Донецька область": "Donetska",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Харківська область": "Kharkivska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Кіровоградська область": "Kirovohradska",
-    "Київська область": "Kyivska",
-    "Луганська область": "Luhanska",
-    "Львівська область": "Lvivska",
-    "Миколаївська область": "Mykolaivska",
-    "Одеська область": "Odeska",
-    "Полтавська область": "Poltavska",
-    "Рівненська область": "Rivnenska",
-    "Севастополь": "Sevastopilska",
-    "Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Житомирська область": "Zhytomyrska",
-    "Київ": "Kyiv"
-}
+# --- Автоматичне зіставлення CSV → GeoJSON ---
+# Якщо точного співпадіння немає, виведе список
+region_summary = df.groupby("region_name")["quantity"].sum().reset_index()
+region_summary["geojson_name"] = region_summary["region_name"].apply(
+    lambda x: x if x in geo_names else None
+)
+missing = region_summary[region_summary["geojson_name"].isna()]
+if not missing.empty:
+    st.warning("Ці регіони не знайдено у GeoJSON, додайте їх у мапу вручну:")
+    st.write(missing["region_name"].tolist())
+
+# --- Додаємо відсутні регіони з нульовою кількістю ---
+for name in geo_names:
+    if name not in region_summary["geojson_name"].values:
+        region_summary = pd.concat(
+            [region_summary, pd.DataFrame({"region_name": [name], "quantity": [0], "geojson_name": [name]})],
+            ignore_index=True
+        )
 
 # --- Фільтри ---
 st.sidebar.header("Фільтри")
@@ -62,7 +53,6 @@ selected_region = st.sidebar.selectbox("Оберіть регіон", ["Всі"]
 selected_year = st.sidebar.selectbox("Оберіть рік виготовлення", ["Всі"] + sorted(df["year_of_manufacture"].astype(str).unique()))
 selected_product = st.sidebar.selectbox("Оберіть продукт", ["Всі"] + sorted(df["product_name"].unique()))
 
-# --- Фільтрація даних ---
 filtered_df = df.copy()
 if selected_region != "Всі":
     filtered_df = filtered_df[filtered_df["region_name"] == selected_region]
@@ -71,39 +61,16 @@ if selected_year != "Всі":
 if selected_product != "Всі":
     filtered_df = filtered_df[filtered_df["product_name"] == selected_product]
 
-# --- Показ таблиці ---
 st.subheader("Дані по фільтру")
 st.dataframe(filtered_df, use_container_width=True)
-
-# --- Агрегація даних для карти ---
-region_summary = (
-    filtered_df.groupby("region_name")["quantity"]
-    .sum()
-    .reset_index()
-)
-
-# --- Додаємо відсутні регіони з нульовою кількістю ---
-for reg in region_name_map:
-    if reg not in region_summary["region_name"].values:
-        region_summary = pd.concat(
-            [region_summary, pd.DataFrame({"region_name": [reg], "quantity": [0]})],
-            ignore_index=True
-        )
-
-# --- Додаємо колонку з назвами для GeoJSON ---
-region_summary["geojson_name"] = region_summary["region_name"].map(region_name_map)
-
-# --- Завантаження GeoJSON ---
-with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
-    geojson_data = json.load(f)
 
 # --- Кольорова шкала ---
 max_quantity = region_summary["quantity"].max()
 colorscale = [
-    [0.0, "lightgray"],  # нуль
-    [0.01, "lightblue"], # маленькі значення
-    [0.5, "skyblue"],    # середні
-    [0.8, "blue"],       # великі
+    [0.0, "lightgray"],  # нулі
+    [0.01, "lightblue"],
+    [0.5, "skyblue"],
+    [0.8, "blue"],
     [1.0, "red"]         # гарячі регіони
 ]
 
