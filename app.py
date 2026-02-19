@@ -15,7 +15,7 @@ def load_data():
 df = load_data()
 
 # Перевірка наявності необхідних колонок
-required_columns = ["Region_name", "product_name", "year_of_manufacture", "quantity"]
+required_columns = ["region_name", "product_name", "year_of_manufacture", "quantity"]
 for col in required_columns:
     if col not in df.columns:
         st.error(f"У CSV відсутня колонка: {col}")
