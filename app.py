@@ -51,8 +51,8 @@ region_summary = (
 # Завантаження GeoJSON
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
-st.write("Ключі properties у GeoJSON:")
-st.write(geojson_data["features"][0]["properties"])
+st.write("Унікальні регіони в CSV:")
+st.write(sorted(df["region_name"].unique()))
 # --- Карта ---
 st.subheader("Карта розподілу кількості засобів")
 
