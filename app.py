@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import json
-import plotly.express as px
+import folium
+from streamlit_folium import st_folium
 
 st.set_page_config(page_title="Dashboard", layout="wide")
-st.title("Інтерактивний дашборд обліку засобів")
+st.title("Інтерактивний дашборд обліку засобів (Folium)")
 
 # --- Завантаження CSV ---
 @st.cache_data
@@ -22,11 +23,31 @@ if missing_columns:
     st.error(f"У CSV відсутні колонки: {missing_columns}")
     st.stop()
 
+# --- Фільтри ---
+st.sidebar.header("Фільтри")
+selected_region = st.sidebar.selectbox("Оберіть регіон", ["Всі"] + sorted(df["region_name"].unique()))
+selected_year = st.sidebar.selectbox("Оберіть рік виготовлення", ["Всі"] + sorted(df["year_of_manufacture"].astype(str).unique()))
+selected_product = st.sidebar.selectbox("Оберіть продукт", ["Всі"] + sorted(df["product_name"].unique()))
+
+filtered_df = df.copy()
+if selected_region != "Всі":
+    filtered_df = filtered_df[filtered_df["region_name"] == selected_region]
+if selected_year != "Всі":
+    filtered_df = filtered_df[filtered_df["year_of_manufacture"].astype(str) == selected_year]
+if selected_product != "Всі":
+    filtered_df = filtered_df[filtered_df["product_name"] == selected_product]
+
+st.subheader("Дані по фільтру")
+st.dataframe(filtered_df, use_container_width=True)
+
+# --- Агрегація даних ---
+region_summary = filtered_df.groupby("region_name")["quantity"].sum().reset_index()
+
 # --- Завантаження GeoJSON ---
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-# --- Словник CSV → GeoJSON (транслітеровані назви) ---
+# --- Словник CSV → GeoJSON ---
 region_name_map = {
     "Автономна Республіка Крим": "Avtonomna Respublika Krym",
     "Черкаська область": "Cherkaska",
@@ -57,58 +78,45 @@ region_name_map = {
     "Київ": "Kyiv"
 }
 
-# --- Додаємо колонку для Plotly ---
-region_summary = df.groupby("region_name")["quantity"].sum().reset_index()
-region_summary["geojson_name"] = region_summary["region_name"].map(region_name_map)
+# --- Додаємо кількість у GeoJSON ---
+for feature in geojson_data["features"]:
+    geo_name = feature["properties"]["name"]
+    # знаходимо українську назву з CSV
+    csv_name = [k for k, v in region_name_map.items() if v == geo_name]
+    if csv_name:
+        qty = int(region_summary.loc[region_summary["region_name"] == csv_name[0], "quantity"].sum())
+    else:
+        qty = 0
+    feature["properties"]["quantity"] = qty
 
-# --- Додаємо відсутні регіони з нульовою кількістю ---
-for name in region_name_map.values():
-    if name not in region_summary["geojson_name"].values:
-        region_summary = pd.concat(
-            [region_summary, pd.DataFrame({"region_name": [name], "quantity": [0], "geojson_name": [name]})],
-            ignore_index=True
-        )
+# --- Створюємо карту ---
+m = folium.Map(location=[49, 32], zoom_start=6)
 
-# --- Фільтри ---
-st.sidebar.header("Фільтри")
-selected_region = st.sidebar.selectbox("Оберіть регіон", ["Всі"] + sorted(df["region_name"].unique()))
-selected_year = st.sidebar.selectbox("Оберіть рік виготовлення", ["Всі"] + sorted(df["year_of_manufacture"].astype(str).unique()))
-selected_product = st.sidebar.selectbox("Оберіть продукт", ["Всі"] + sorted(df["product_name"].unique()))
+def color_by_quantity(qty):
+    if qty == 0:
+        return "lightgray"
+    elif qty <= 10:
+        return "lightblue"
+    elif qty <= 50:
+        return "blue"
+    else:
+        return "red"
 
-filtered_df = df.copy()
-if selected_region != "Всі":
-    filtered_df = filtered_df[filtered_df["region_name"] == selected_region]
-if selected_year != "Всі":
-    filtered_df = filtered_df[filtered_df["year_of_manufacture"].astype(str) == selected_year]
-if selected_product != "Всі":
-    filtered_df = filtered_df[filtered_df["product_name"] == selected_product]
+folium.GeoJson(
+    geojson_data,
+    style_function=lambda feature: {
+        "fillColor": color_by_quantity(feature["properties"]["quantity"]),
+        "color": "black",
+        "weight": 1,
+        "fillOpacity": 0.6
+    },
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name", "quantity"],
+        aliases=["Регіон", "Кількість"],
+        localize=True
+    )
+).add_to(m)
 
-st.subheader("Дані по фільтру")
-st.dataframe(filtered_df, use_container_width=True)
-
-# --- Кольорова шкала ---
-max_quantity = region_summary["quantity"].max()
-colorscale = [
-    [0.0, "lightgray"],
-    [0.01, "lightblue"],
-    [0.5, "skyblue"],
-    [0.8, "blue"],
-    [1.0, "red"]
-]
-
-# --- Карта ---
 st.subheader("Карта розподілу кількості засобів")
-fig = px.choropleth(
-    region_summary,
-    geojson=geojson_data,
-    locations="geojson_name",
-    featureidkey="properties.name",
-    color="quantity",
-    color_continuous_scale=colorscale,
-    range_color=(0, max_quantity),
-    hover_data={"region_name": True, "quantity": True},
-)
-
-fig.update_geos(fitbounds="locations", visible=False)
-st.plotly_chart(fig, use_container_width=True)
+st_folium(m, width=900, height=600)
 
