@@ -6,7 +6,7 @@ from streamlit_folium import st_folium
 import io
 
 st.set_page_config(page_title="Dashboard", layout="wide")
-st.title("Дашборд забезпечення виробами")
+st.title("Дашборд забезпечення засобами РХБ захисту")
 
 # ----------------------------
 # Завантаження даних
@@ -43,7 +43,7 @@ selected_region = st.sidebar.selectbox(
 )
 
 selected_product = st.sidebar.selectbox(
-    "Виріб",
+    "Засіб РХБЗ",
     ["Всі"] + sorted(df["product_name"].unique())
 )
 
@@ -91,16 +91,16 @@ total_required = int(region_summary["total_required"].sum())
 
 col1, col2 = st.columns(2)
 col1.metric("Наявність", total_quantity)
-col2.metric("Потреба", total_required)
+col2.metric("Штатна потреба", total_required)
 
 # ----------------------------
 # Таблиця
 # ----------------------------
 display_table = region_summary.rename(columns={
     "region_name": "Регіон",
-    "total_required": "Потреба",
+    "total_required": "Штатна потреба",
     "total_quantity": "Наявність"
-})[["Регіон","Потреба","Наявність","Нестача","Надлишок","% забезпечення"]]
+})[["Регіон","Штатна потреба","Наявність","Нестача","Надлишок","% забезпечення"]]
 
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
