@@ -236,36 +236,40 @@ background-color: white;
 border: 2px solid #999;
 border-radius: 10px;
 z-index: 9999;
-font-size: 13px;
-padding: 12px;
+font-size: 14px;
+padding: 14px;
 box-shadow: 3px 3px 8px rgba(0,0,0,0.3);
+color: black;
+line-height: 1.6;
 ">
 
-<b style="font-size:15px;">Рівень забезпечення</b><br><br>
-
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#1a9850;width:18px;height:18px;margin-right:8px;"></div>
-<span>≥ 100%</span>
+<div style="font-weight: bold; font-size: 15px; margin-bottom: 10px;">
+Рівень забезпечення
 </div>
 
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#fee08b;width:18px;height:18px;margin-right:8px;"></div>
-<span>75–99%</span>
+<div>
+<span style="display:inline-block;width:18px;height:18px;background:#1a9850;margin-right:8px;border:1px solid #555;"></span>
+≥ 100%
 </div>
 
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#f46d43;width:18px;height:18px;margin-right:8px;"></div>
-<span>50–74%</span>
+<div>
+<span style="display:inline-block;width:18px;height:18px;background:#fee08b;margin-right:8px;border:1px solid #555;"></span>
+75–99%
 </div>
 
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#d73027;width:18px;height:18px;margin-right:8px;"></div>
-<span>< 50%</span>
+<div>
+<span style="display:inline-block;width:18px;height:18px;background:#f46d43;margin-right:8px;border:1px solid #555;"></span>
+50–74%
 </div>
 
-<div style="display:flex;align-items:center;">
-<div style="background:#ffffff;border:1px solid #999;width:18px;height:18px;margin-right:8px;"></div>
-<span>0%</span>
+<div>
+<span style="display:inline-block;width:18px;height:18px;background:#d73027;margin-right:8px;border:1px solid #555;"></span>
+< 50%
+</div>
+
+<div>
+<span style="display:inline-block;width:18px;height:18px;background:#ffffff;margin-right:8px;border:1px solid #555;"></span>
+0%
 </div>
 
 </div>
