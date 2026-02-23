@@ -111,34 +111,72 @@ st.dataframe(display_table, use_container_width=True)
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-# Створюємо словник відповідності напряму
-coverage_dict = dict(
-    zip(region_summary["region_name"], region_summary["% забезпечення"])
-)
+# Мапінг: українська назва -> англійська (як у GeoJSON)
+region_name_map = {
+    "Київ": "Kyiv_city",
+    "Київська область": "Kyivska",
+    "Львівська область": "Lvivska",
+    "Одеська область": "Odeska",
+    "Харківська область": "Kharkivska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Полтавська область": "Poltavska",
+    "Сумська область": "Sumska",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Кіровоградська область": "Kirovohradska",
+    "Луганська область": "Luhanska",
+    "Миколаївська область": "Mykolaivska",
+    "Рівненська область": "Rivnenska",
+    "Тернопільська область": "Ternopilska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Черкаська область": "Cherkaska",
+    "Чернігівська область": "Chernihivska",
+    "Чернівецька область": "Chernivetska",
+    "Житомирська область": "Zhytomyrska"
+}
 
-# Додаємо % у GeoJSON (БЕЗ region_name_map)
+# Створюємо словник англійська назва -> %
+coverage_dict = {}
+
+for ukr_name, eng_name in region_name_map.items():
+    value = region_summary.loc[
+        region_summary["region_name"] == ukr_name,
+        "% забезпечення"
+    ]
+    coverage_dict[eng_name] = float(value.values[0]) if not value.empty else 0
+
+
+# Додаємо coverage та українську назву в GeoJSON
 for feature in geojson_data["features"]:
-    geo_name = feature["properties"]["name"]
-    feature["properties"]["coverage"] = coverage_dict.get(geo_name, 0)
+    eng_name = feature["properties"]["name"]
+    feature["properties"]["coverage"] = coverage_dict.get(eng_name, 0)
+
+    # Знаходимо українську назву
+    ukr_name = next((k for k, v in region_name_map.items() if v == eng_name), eng_name)
+    feature["properties"]["ukr_name"] = ukr_name
 
 
 # --- 5 рівнів забезпечення ---
 def color_by_coverage(coverage):
     if coverage == 0:
-        return "#ffffff"   # білий
+        return "#ffffff"
     elif coverage < 50:
-        return "#d73027"   # червоний
+        return "#d73027"
     elif coverage < 75:
-        return "#f46d43"   # помаранчевий
+        return "#f46d43"
     elif coverage < 100:
-        return "#fee08b"   # жовтий
+        return "#fee08b"
     else:
-        return "#1a9850"   # зелений
+        return "#1a9850"
 
 
 m = folium.Map(location=[49, 32], zoom_start=6, control_scale=True)
 
-geo_layer = folium.GeoJson(
+folium.GeoJson(
     geojson_data,
     style_function=lambda feature: {
         "fillColor": color_by_coverage(feature["properties"]["coverage"]),
@@ -147,23 +185,19 @@ geo_layer = folium.GeoJson(
         "fillOpacity": 0.75
     },
     tooltip=folium.GeoJsonTooltip(
-        fields=["name", "coverage"],
-        aliases=["Регіон", "% забезпечення"],
-        localize=True
+        fields=["ukr_name", "coverage"],
+        aliases=["Регіон", "% забезпечення"]
     )
-)
-
-geo_layer.add_to(m)
+).add_to(m)
 
 
 # ----------------------------
-# Постійні назви регіонів
+# Постійні українські назви
 # ----------------------------
 for feature in geojson_data["features"]:
-    name = feature["properties"]["name"]
+    name = feature["properties"]["ukr_name"]
     geometry = feature["geometry"]
 
-    # Беремо перший полігон (працює стабільно)
     if geometry["type"] == "MultiPolygon":
         coords = geometry["coordinates"][0][0]
     else:
@@ -189,17 +223,8 @@ for feature in geojson_data["features"]:
         )
     ).add_to(m)
 
-
 # ----------------------------
-# Видаляємо можливу авто-легенду
-# ----------------------------
-for key in list(m._children):
-    if "color_map" in key:
-        del m._children[key]
-
-
-# ----------------------------
-# Легенда (5 блоків)
+# Легенда
 # ----------------------------
 legend_html = """
 <div style="
@@ -250,6 +275,9 @@ m.get_root().html.add_child(folium.Element(legend_html))
 
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=700)
+
+
+
 
 # ----------------------------
 # Експорт в Excel
