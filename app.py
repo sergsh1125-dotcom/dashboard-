@@ -29,6 +29,7 @@ required_columns = [
 
 if not all(col in df.columns for col in required_columns):
     st.error("У CSV відсутні необхідні колонки.")
+    st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
 
 # ----------------------------
@@ -47,8 +48,10 @@ selected_product = st.sidebar.selectbox(
 )
 
 filtered_df = df.copy()
+
 if selected_region != "Всі":
     filtered_df = filtered_df[filtered_df["region_name"] == selected_region]
+
 if selected_product != "Всі":
     filtered_df = filtered_df[filtered_df["product_name"] == selected_product]
 
@@ -65,21 +68,33 @@ region_summary = (
     .reset_index()
 )
 
-region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).apply(lambda x: x if x > 0 else 0)
-region_summary["Надлишок"] = (region_summary["total_quantity"] - region_summary["total_required"]).apply(lambda x: x if x > 0 else 0)
-region_summary["% забезпечення"] = (region_summary["total_quantity"] / region_summary["total_required"] * 100).fillna(0).round(1)
+# Безпечне обчислення %
+region_summary["% забезпечення"] = (
+    (region_summary["total_quantity"] / region_summary["total_required"])
+    .replace([float("inf"), -float("inf")], 0)
+    .fillna(0) * 100
+).round(1)
+
+region_summary["Нестача"] = (
+    region_summary["total_required"] - region_summary["total_quantity"]
+).apply(lambda x: x if x > 0 else 0)
+
+region_summary["Надлишок"] = (
+    region_summary["total_quantity"] - region_summary["total_required"]
+).apply(lambda x: x if x > 0 else 0)
 
 # ----------------------------
 # KPI
 # ----------------------------
-total_quantity = region_summary["total_quantity"].sum()
-total_required = region_summary["total_required"].sum()
+total_quantity = int(region_summary["total_quantity"].sum())
+total_required = int(region_summary["total_required"].sum())
+
 col1, col2 = st.columns(2)
-col1.metric("Наявність", int(total_quantity))
-col2.metric("Потреба", int(total_required))
+col1.metric("Наявність", total_quantity)
+col2.metric("Потреба", total_required)
 
 # ----------------------------
-# Таблиця по регіонах
+# Таблиця
 # ----------------------------
 display_table = region_summary.rename(columns={
     "region_name": "Регіон",
@@ -96,6 +111,7 @@ st.dataframe(display_table, use_container_width=True)
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
 
+# Мапінг назв
 region_name_map = {
     "Київ": "Kyiv_city",
     "Київська область": "Kyivska",
@@ -127,18 +143,20 @@ coverage_dict = dict(zip(region_summary["region_name"], region_summary["% заб
 
 for feature in geojson_data["features"]:
     geo_name = feature["properties"]["name"]
-    csv_name = [k for k, v in region_name_map.items() if v == geo_name]
-    feature["properties"]["coverage"] = coverage_dict.get(csv_name[0], 0) if csv_name else 0
+    csv_region = next((k for k, v in region_name_map.items() if v == geo_name), None)
+    feature["properties"]["coverage"] = coverage_dict.get(csv_region, 0)
 
+# Колір за категорією
 def color_by_coverage(coverage):
     if coverage >= 100:
-        return "green"
+        return "#1a9850"
     elif coverage >= 75:
-        return "orange"
+        return "#fdae61"
     else:
-        return "red"
+        return "#d73027"
 
 m = folium.Map(location=[49, 32], zoom_start=6)
+
 folium.GeoJson(
     geojson_data,
     style_function=lambda feature: {
@@ -149,31 +167,33 @@ folium.GeoJson(
     },
     tooltip=folium.GeoJsonTooltip(
         fields=["name","coverage"],
-        aliases=["Регіон","% забезпечення"]
+        aliases=["Регіон","% забезпечення"],
+        localize=True
     )
 ).add_to(m)
 
 # ----------------------------
-# Легенда
+# Постійна легенда
 # ----------------------------
 legend_html = """
 <div style="
 position: fixed;
-bottom: 50px;
-left: 50px;
-width: 220px;
+bottom: 40px;
+left: 40px;
+width: 230px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
 font-size:14px;
-padding:10px;
+padding:12px;
+box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
 ">
-<b>Рівень забезпечення</b><br>
-<i style="background:green;width:15px;height:15px;display:inline-block"></i>
+<b>Рівень забезпечення</b><br><br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i>
 &nbsp; ≥ 100%<br>
-<i style="background:orange;width:15px;height:15px;display:inline-block"></i>
+<i style="background:#fdae61;width:15px;height:15px;display:inline-block"></i>
 &nbsp; 75–99%<br>
-<i style="background:red;width:15px;height:15px;display:inline-block"></i>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i>
 &nbsp; < 75%
 </div>
 """
@@ -183,7 +203,7 @@ st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=600)
 
 # ----------------------------
-# ЕКСПОРТ В EXCEL
+# Експорт в Excel
 # ----------------------------
 def convert_to_excel(df):
     output = io.BytesIO()
@@ -192,6 +212,7 @@ def convert_to_excel(df):
     return output.getvalue()
 
 excel_data = convert_to_excel(display_table)
+
 st.download_button(
     label="📥 Завантажити звіт в Excel",
     data=excel_data,
