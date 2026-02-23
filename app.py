@@ -111,30 +111,51 @@ st.dataframe(display_table, use_container_width=True)
 with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
     geojson_data = json.load(f)
 
+# Мапінг назв
+region_name_map = {
+    "Київ": "Kyiv_city",
+    "Київська область": "Kyivska",
+    "Львівська область": "Lvivska",
+    "Одеська область": "Odeska",
+    "Харківська область": "Kharkivska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Полтавська область": "Poltavska",
+    "Сумська область": "Sumska",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Кіровоградська область": "Kirovohradska",
+    "Луганська область": "Luhanska",
+    "Миколаївська область": "Mykolaivska",
+    "Рівненська область": "Rivnenska",
+    "Тернопільська область": "Ternopilska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Черкаська область": "Cherkaska",
+    "Чернігівська область": "Chernihivska",
+    "Чернівецька область": "Chernivetska",
+    "Житомирська область": "Zhytomyrska"
+}
+
 coverage_dict = dict(zip(region_summary["region_name"], region_summary["% забезпечення"]))
 
-# Додаємо % до GeoJSON
 for feature in geojson_data["features"]:
     geo_name = feature["properties"]["name"]
-    csv_name = [k for k, v in region_name_map.items() if v == geo_name]
-    feature["properties"]["coverage"] = coverage_dict.get(csv_name[0], 0) if csv_name else 0
+    csv_region = next((k for k, v in region_name_map.items() if v == geo_name), None)
+    feature["properties"]["coverage"] = coverage_dict.get(csv_region, 0)
 
-
-# --- 5 рівнів забезпечення ---
+# Колір за категорією
 def color_by_coverage(coverage):
-    if coverage == 0:
-        return "#ffffff"   # білий
-    elif coverage < 50:
-        return "#d73027"   # червоний
-    elif coverage < 75:
-        return "#f46d43"   # помаранчевий
-    elif coverage < 100:
-        return "#fee08b"   # жовтий
+    if coverage >= 100:
+        return "#1a9850"
+    elif coverage >= 75:
+        return "#fdae61"
     else:
-        return "#1a9850"   # зелений
+        return "#d73027"
 
-
-m = folium.Map(location=[49, 32], zoom_start=6, control_scale=True)
+m = folium.Map(location=[49, 32], zoom_start=6)
 
 folium.GeoJson(
     geojson_data,
@@ -142,107 +163,44 @@ folium.GeoJson(
         "fillColor": color_by_coverage(feature["properties"]["coverage"]),
         "color": "black",
         "weight": 1,
-        "fillOpacity": 0.75
+        "fillOpacity": 0.6
     },
     tooltip=folium.GeoJsonTooltip(
-        fields=["name", "coverage"],
-        aliases=["Регіон", "% забезпечення"],
+        fields=["name","coverage"],
+        aliases=["Регіон","% забезпечення"],
         localize=True
     )
 ).add_to(m)
 
 # ----------------------------
-# Постійні назви регіонів
-# ----------------------------
-for feature in geojson_data["features"]:
-    coords = feature["geometry"]["coordinates"]
-
-    if feature["geometry"]["type"] == "MultiPolygon":
-        coords = coords[0][0]
-    else:
-        coords = coords[0]
-
-    lat = sum([point[1] for point in coords]) / len(coords)
-    lon = sum([point[0] for point in coords]) / len(coords)
-
-    folium.Marker(
-        location=[lat, lon],
-        icon=folium.DivIcon(
-            html=f"""
-            <div style="
-                font-size:9px;
-                font-weight:600;
-                color:black;
-                text-align:center;
-                text-shadow: 1px 1px 2px white;
-            ">
-                {feature["properties"]["name"]}
-            </div>
-            """
-        )
-    ).add_to(m)
-
-
-# ----------------------------
-# Видаляємо можливу авто-легенду
-# ----------------------------
-for key in list(m._children):
-    if "color_map" in key:
-        del m._children[key]
-
-
-# ----------------------------
-# Кастомна легенда (5 блоків)
+# Постійна легенда
 # ----------------------------
 legend_html = """
 <div style="
-position: absolute;
-bottom: 30px;
-left: 30px;
-width: 240px;
+position: fixed;
+bottom: 40px;
+left: 40px;
+width: 230px;
 background-color: white;
-border: 2px solid #999;
-border-radius: 10px;
-z-index: 9999;
-font-size: 13px;
-padding: 12px;
-box-shadow: 3px 3px 8px rgba(0,0,0,0.3);
+border:2px solid grey;
+z-index:9999;
+font-size:14px;
+padding:12px;
+box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
 ">
-
-<b style="font-size:15px;">Рівень забезпечення</b><br><br>
-
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#1a9850;width:18px;height:18px;margin-right:8px;"></div>
-<span>≥ 100%</span>
-</div>
-
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#fee08b;width:18px;height:18px;margin-right:8px;"></div>
-<span>75–99%</span>
-</div>
-
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#f46d43;width:18px;height:18px;margin-right:8px;"></div>
-<span>50–74%</span>
-</div>
-
-<div style="display:flex;align-items:center;margin-bottom:6px;">
-<div style="background:#d73027;width:18px;height:18px;margin-right:8px;"></div>
-<span>< 50%</span>
-</div>
-
-<div style="display:flex;align-items:center;">
-<div style="background:#ffffff;border:1px solid #999;width:18px;height:18px;margin-right:8px;"></div>
-<span>0%</span>
-</div>
-
+<b>Рівень забезпечення</b><br><br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i>
+&nbsp; ≥ 100%<br>
+<i style="background:#fdae61;width:15px;height:15px;display:inline-block"></i>
+&nbsp; 75–99%<br>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i>
+&nbsp; < 75%
 </div>
 """
-
 m.get_root().html.add_child(folium.Element(legend_html))
 
 st.subheader("Карта рівня забезпечення")
-st_folium(m, width=1000, height=700)
+st_folium(m, width=1000, height=600)
 
 # ----------------------------
 # Експорт в Excel
