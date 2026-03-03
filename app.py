@@ -192,7 +192,7 @@ with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
 
 region_name_map = {
     "Київ": "Kyiv_city", "Київська область":"Kyivska", "Львівська область":"Lvivska",
-    "Одеська область":"Odeska", "Харківська область":"Kharkivska", "Дніпропетровська область":"Dnipropetrovska",
+    "Одеська область":"Odeska", "Харківська область":"Kharkivska", "Донецька область;"Donetska" ""Дніпропетровська область":"Dnipropetrovska",
     "Полтавська область":"Poltavska", "Сумська область":"Sumska", "Вінницька область":"Vinnytska",
     "Волинська область":"Volynska","Закарпатська область":"Zakarpatska","Запорізька область":"Zaporizka",
     "Івано-Франківська область":"Ivano-Frankivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
