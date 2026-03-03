@@ -24,18 +24,18 @@ def generate_template():
     ]
 
     allowed_regions = [
-        "Київ","Київська область","Львівська область","Одеська область",
-        "Харківська область","Дніпропетровська область","Полтавська область",
-        "Сумська область","Вінницька область","Волинська область","Закарпатська область",
-        "Запорізька область","Івано-Франківська область","Кіровоградська область",
-        "Луганська область","Миколаївська область","Рівненська область",
-        "Тернопільська область","Херсонська область","Хмельницька область",
-        "Черкаська область","Чернігівська область","Чернівецька область","Житомирська область"
+        "Київ","Вінницька область","Волинська область","Дніпропетровська область",
+        "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
+        "Івано-Франківська область","Київська область","Кіровоградська область","Луганська область",
+        "Львівська область","Миколаївська область","Одеська область","Полтавська область",
+        "Рівненська область","Сумська область","Тернопільська область","Харківська область",
+        "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
+        "Чернігівська область"
     ]
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # === Основний лист ===
+        # Основний лист
         template_df = pd.DataFrame({
             "region_name": [],
             "product_name": [],
@@ -44,7 +44,7 @@ def generate_template():
         })
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
-        # === Лист довідника ===
+        # Лист довідника
         max_len = max(len(allowed_regions), len(allowed_products))
         ref_df = pd.DataFrame({
             "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
@@ -55,13 +55,13 @@ def generate_template():
         workbook = writer.book
         data_sheet = workbook["Дані"]
 
-        # ---- Підсвітка заголовків
+        # Підсвітка заголовків
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         for cell in data_sheet[1]:
             cell.fill = header_fill
             cell.protection = Protection(locked=True)
 
-        # ---- Data Validation для регіонів
+        # Data Validation для регіонів
         dv_region = DataValidation(
             type="list",
             formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
@@ -70,7 +70,7 @@ def generate_template():
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
-        # ---- Data Validation для продуктів
+        # Data Validation для продуктів
         dv_product = DataValidation(
             type="list",
             formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
@@ -79,7 +79,7 @@ def generate_template():
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
-        # ---- Data Validation для чисел >=0
+        # Data Validation для чисел >=0
         dv_number = DataValidation(
             type="decimal",
             operator="greaterThanOrEqual",
@@ -89,11 +89,12 @@ def generate_template():
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
-        # ---- Захист листа
+        # Захист листа
         data_sheet.protection.sheet = True
 
     return output.getvalue()
 
+# Кнопка для завантаження шаблону
 st.sidebar.header("Excel шаблон")
 if st.sidebar.button("📄 Завантажити шаблон Excel"):
     template_bytes = generate_template()
@@ -191,14 +192,31 @@ with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
 region_name_map = {
-    "Київ": "Kyiv_city", "Київська область":"Kyivska", "Львівська область":"Lvivska",
-    "Одеська область":"Odeska", "Харківська область":"Kharkivska", "Донецька область;"Donetska" ""Дніпропетровська область":"Dnipropetrovska",
-    "Полтавська область":"Poltavska", "Сумська область":"Sumska", "Вінницька область":"Vinnytska",
-    "Волинська область":"Volynska","Закарпатська область":"Zakarpatska","Запорізька область":"Zaporizka",
-    "Івано-Франківська область":"Ivano-Frankivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
-    "Миколаївська область":"Mykolaivska","Рівненська область":"Rivnenska","Тернопільська область":"Ternopilska",
-    "Херсонська область":"Khersonska","Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska",
-    "Чернігівська область":"Chernihivska","Чернівецька область":"Chernivetska","Житомирська область":"Zhytomyrska"
+    "Київ": "Kyiv_city",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Донецька область": "Donetska",
+    "Житомирська область": "Zhytomyrska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Київська область": "Kyivska",
+    "Кіровоградська область": "Kirovohradska",
+    "Луганська область": "Luhanska",
+    "Львівська область": "Lvivska",
+    "Миколаївська область": "Mykolaivska",
+    "Одеська область": "Odeska",
+    "Полтавська область": "Poltavska",
+    "Рівненська область": "Rivnenska",
+    "Сумська область": "Sumska",
+    "Тернопільська область": "Ternopilska",
+    "Харківська область": "Kharkivska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Черкаська область": "Cherkaska",
+    "Чернівецька область": "Chernivetska",
+    "Чернігівська область": "Chernihivska"
 }
 
 coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
