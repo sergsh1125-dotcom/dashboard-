@@ -13,26 +13,106 @@ st.title("Дашборд забезпечення засобами РХБ зах
 # =====================================================
 
 def generate_template():
-    template_df = pd.DataFrame({
-        "region_name": [],
-        "product_name": [],
-        "year_of_manufacture": [],
-        "quantity": [],
-        "required_quantity": []
-    })
+   from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.styles import PatternFill, Protection
+
+def generate_template():
+
+    allowed_products = [
+        "спеціальна техніка",
+        "прилади РР",
+        "прилади ХР",
+        "протигази",
+        "респіратори",
+        "захисний одяг"
+    ]
+
+    allowed_regions = [
+        "Київ",
+        "Київська область",
+        "Львівська область",
+        "Одеська область",
+        "Харківська область",
+        "Дніпропетровська область",
+        "Полтавська область",
+        "Сумська область",
+        "Вінницька область",
+        "Волинська область",
+        "Закарпатська область",
+        "Запорізька область",
+        "Івано-Франківська область",
+        "Кіровоградська область",
+        "Луганська область",
+        "Миколаївська область",
+        "Рівненська область",
+        "Тернопільська область",
+        "Херсонська область",
+        "Хмельницька область",
+        "Черкаська область",
+        "Чернігівська область",
+        "Чернівецька область",
+        "Житомирська область"
+    ]
 
     output = io.BytesIO()
+
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
+
+        # === Основний лист ===
+        template_df = pd.DataFrame({
+            "region_name": [],
+            "product_name": [],
+            "quantity": [],
+            "required_quantity": []
+        })
+
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
-    return output.getvalue()
+        # === Лист довідника ===
+        ref_df = pd.DataFrame({
+            "Регіони": allowed_regions + [""] * (len(allowed_products) - len(allowed_regions)),
+            "Засоби": allowed_products + [""] * (len(allowed_regions) - len(allowed_products))
+        })
 
-st.sidebar.download_button(
-    label="⬇ Завантажити шаблон Excel",
-    data=generate_template(),
-    file_name="template_rhbz.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+        ref_df.to_excel(writer, sheet_name="Довідник", index=False)
+
+        workbook = writer.book
+        data_sheet = workbook["Дані"]
+
+        # ---- Підсвітка заголовків
+        header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+
+        for cell in data_sheet[1]:
+            cell.fill = header_fill
+            cell.protection = Protection(locked=True)
+
+        # ---- Data Validation для регіонів
+        region_range = f"Довідник!$A$2:$A${len(allowed_regions)+1}"
+        dv_region = DataValidation(type="list", formula1=f"={region_range}", allow_blank=True)
+        dv_region.add("A2:A500")
+        data_sheet.add_data_validation(dv_region)
+
+        # ---- Data Validation для засобів
+        product_range = f"Довідник!$B$2:$B${len(allowed_products)+1}"
+        dv_product = DataValidation(type="list", formula1=f"={product_range}", allow_blank=True)
+        dv_product.add("B2:B500")
+        data_sheet.add_data_validation(dv_product)
+
+        # ---- Data Validation для чисел >= 0
+        dv_number = DataValidation(
+            type="decimal",
+            operator="greaterThanOrEqual",
+            formula1="0",
+            allow_blank=True
+        )
+
+        dv_number.add("C2:D500")
+        data_sheet.add_data_validation(dv_number)
+
+        # ---- Захист листа (редагуються тільки дані)
+        data_sheet.protection.enable()
+
+    return output.getvalue()
 
 # =====================================================
 # 1. ЗАВАНТАЖЕННЯ EXCEL
