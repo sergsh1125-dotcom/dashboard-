@@ -4,9 +4,9 @@ import io
 import json
 import folium
 from streamlit_folium import st_folium
+import random
 from openpyxl.styles import PatternFill, Protection
 from openpyxl.worksheet.datavalidation import DataValidation
-import random
 
 st.set_page_config(page_title="Dashboard РХБЗ", layout="wide")
 st.title("Дашборд забезпечення засобами РХБ захисту")
@@ -179,12 +179,13 @@ folium.GeoJson(
     }
 ).add_to(m)
 
+# Легенда з правильним відображенням %
 legend_html = """
 <div style="
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 170px;
+width: 180px;
 height: 150px;
 background-color: white;
 border:2px solid grey;
@@ -193,13 +194,14 @@ font-size:14px;
 padding: 10px;
 ">
 <b>Легенда % забезпечення</b><br>
-<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
-<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
-<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
-<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> &lt;50&#37;<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74&#37;<br>
+<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99&#37;<br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100&#37;
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
+
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=650)
 
