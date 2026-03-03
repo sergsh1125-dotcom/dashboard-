@@ -1,23 +1,19 @@
 import streamlit as st
 import pandas as pd
+import io
 import json
 import folium
 from streamlit_folium import st_folium
-import io
+from openpyxl.styles import PatternFill, Protection
+from openpyxl.worksheet.datavalidation import DataValidation
 
 st.set_page_config(page_title="Dashboard РХБЗ", layout="wide")
 st.title("Дашборд забезпечення засобами РХБ захисту")
 
 # =====================================================
-# ШАБЛОН EXCEL ДЛЯ ЗАВАНТАЖЕННЯ
+# 1. ШАБЛОН EXCEL
 # =====================================================
-
 def generate_template():
-   from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.styles import PatternFill, Protection
-
-def generate_template():
-
     allowed_products = [
         "спеціальна техніка",
         "прилади РР",
@@ -28,36 +24,17 @@ def generate_template():
     ]
 
     allowed_regions = [
-        "Київ",
-        "Київська область",
-        "Львівська область",
-        "Одеська область",
-        "Харківська область",
-        "Дніпропетровська область",
-        "Полтавська область",
-        "Сумська область",
-        "Вінницька область",
-        "Волинська область",
-        "Закарпатська область",
-        "Запорізька область",
-        "Івано-Франківська область",
-        "Кіровоградська область",
-        "Луганська область",
-        "Миколаївська область",
-        "Рівненська область",
-        "Тернопільська область",
-        "Херсонська область",
-        "Хмельницька область",
-        "Черкаська область",
-        "Чернігівська область",
-        "Чернівецька область",
-        "Житомирська область"
+        "Київ","Київська область","Львівська область","Одеська область",
+        "Харківська область","Дніпропетровська область","Полтавська область",
+        "Сумська область","Вінницька область","Волинська область","Закарпатська область",
+        "Запорізька область","Івано-Франківська область","Кіровоградська область",
+        "Луганська область","Миколаївська область","Рівненська область",
+        "Тернопільська область","Херсонська область","Хмельницька область",
+        "Черкаська область","Чернігівська область","Чернівецька область","Житомирська область"
     ]
 
     output = io.BytesIO()
-
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-
         # === Основний лист ===
         template_df = pd.DataFrame({
             "region_name": [],
@@ -65,15 +42,14 @@ def generate_template():
             "quantity": [],
             "required_quantity": []
         })
-
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
         # === Лист довідника ===
+        max_len = max(len(allowed_regions), len(allowed_products))
         ref_df = pd.DataFrame({
-            "Регіони": allowed_regions + [""] * (len(allowed_products) - len(allowed_regions)),
-            "Засоби": allowed_products + [""] * (len(allowed_regions) - len(allowed_products))
+            "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
+            "Засоби": allowed_products + [""]*(max_len - len(allowed_products))
         })
-
         ref_df.to_excel(writer, sheet_name="Довідник", index=False)
 
         workbook = writer.book
@@ -81,50 +57,57 @@ def generate_template():
 
         # ---- Підсвітка заголовків
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-
         for cell in data_sheet[1]:
             cell.fill = header_fill
             cell.protection = Protection(locked=True)
 
         # ---- Data Validation для регіонів
-        region_range = f"Довідник!$A$2:$A${len(allowed_regions)+1}"
-        dv_region = DataValidation(type="list", formula1=f"={region_range}", allow_blank=True)
+        dv_region = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
+            allow_blank=True
+        )
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
-        # ---- Data Validation для засобів
-        product_range = f"Довідник!$B$2:$B${len(allowed_products)+1}"
-        dv_product = DataValidation(type="list", formula1=f"={product_range}", allow_blank=True)
+        # ---- Data Validation для продуктів
+        dv_product = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
+            allow_blank=True
+        )
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
-        # ---- Data Validation для чисел >= 0
+        # ---- Data Validation для чисел >=0
         dv_number = DataValidation(
             type="decimal",
             operator="greaterThanOrEqual",
             formula1="0",
             allow_blank=True
         )
-
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
-        # ---- Захист листа (редагуються тільки дані)
-        data_sheet.protection.enable()
+        # ---- Захист листа
+        data_sheet.protection.sheet = True
 
     return output.getvalue()
 
+st.sidebar.header("Excel шаблон")
+if st.sidebar.button("📄 Завантажити шаблон Excel"):
+    template_bytes = generate_template()
+    st.sidebar.download_button(
+        label="📥 Завантажити шаблон",
+        data=template_bytes,
+        file_name="template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 # =====================================================
-# 1. ЗАВАНТАЖЕННЯ EXCEL
+# 2. ЗАВАНТАЖЕННЯ EXCEL
 # =====================================================
-
-st.sidebar.header("Завантаження бази")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Завантаж Excel шаблон",
-    type=["xlsx"]
-)
-
+uploaded_file = st.sidebar.file_uploader("Завантаж Excel файл", type=["xlsx"])
 if uploaded_file is None:
     st.info("⬅ Завантажте Excel файл для початку роботи.")
     st.stop()
@@ -132,217 +115,123 @@ if uploaded_file is None:
 df = pd.read_excel(uploaded_file)
 df.columns = df.columns.str.strip().str.lower()
 
-required_columns = [
-    "region_name",
-    "product_name",
-    "year_of_manufacture",
-    "quantity",
-    "required_quantity"
-]
-
+required_columns = ["region_name","product_name","quantity","required_quantity"]
 if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
     st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
 
-# очищення числових полів
-for col in ["quantity", "required_quantity"]:
+for col in ["quantity","required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
 # =====================================================
-# 2. ФІЛЬТРИ
+# 3. ФІЛЬТРИ
 # =====================================================
-
 st.sidebar.header("Фільтри")
-
-selected_region = st.sidebar.selectbox(
-    "Регіон",
-    ["Всі"] + sorted(df["region_name"].unique())
-)
-
-selected_product = st.sidebar.selectbox(
-    "Засіб РХБЗ",
-    ["Всі"] + sorted(df["product_name"].unique())
-)
+selected_region = st.sidebar.selectbox("Регіон", ["Всі"] + sorted(df["region_name"].unique()))
+selected_product = st.sidebar.selectbox("Засіб РХБЗ", ["Всі"] + sorted(df["product_name"].unique()))
 
 filtered_df = df.copy()
-
 if selected_region != "Всі":
-    filtered_df = filtered_df[filtered_df["region_name"] == selected_region]
-
+    filtered_df = filtered_df[filtered_df["region_name"]==selected_region]
 if selected_product != "Всі":
-    filtered_df = filtered_df[filtered_df["product_name"] == selected_product]
+    filtered_df = filtered_df[filtered_df["product_name"]==selected_product]
 
 # =====================================================
-# 3. АГРЕГАЦІЯ
+# 4. АГРЕГАЦІЯ
 # =====================================================
-
 region_summary = (
-    filtered_df
-    .groupby("region_name")
-    .agg(
-        total_quantity=("quantity", "sum"),
-        total_required=("required_quantity", "sum")
-    )
+    filtered_df.groupby("region_name")
+    .agg(total_quantity=("quantity","sum"), total_required=("required_quantity","sum"))
     .reset_index()
 )
-
-def calculate_percent(row):
-    if row["total_required"] > 0:
-        return round((row["total_quantity"] / row["total_required"]) * 100, 1)
-    return 0
-
-region_summary["% забезпечення"] = region_summary.apply(calculate_percent, axis=1)
-
-region_summary["Нестача"] = (
-    region_summary["total_required"] - region_summary["total_quantity"]
-).apply(lambda x: x if x > 0 else 0)
-
-region_summary["Надлишок"] = (
-    region_summary["total_quantity"] - region_summary["total_required"]
-).apply(lambda x: x if x > 0 else 0)
+region_summary["% забезпечення"] = region_summary.apply(
+    lambda row: round((row["total_quantity"]/row["total_required"])*100,1)
+    if row["total_required"]>0 else 0,
+    axis=1
+)
+region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).clip(lower=0)
+region_summary["Надлишок"] = (region_summary["total_quantity"] - region_summary["total_required"]).clip(lower=0)
 
 # =====================================================
-# 4. KPI
+# 5. KPI
 # =====================================================
-
 total_quantity = int(region_summary["total_quantity"].sum())
 total_required = int(region_summary["total_required"].sum())
-
-col1, col2, col3 = st.columns(3)
-
+col1,col2,col3 = st.columns(3)
 col1.metric("Наявність", total_quantity)
 col2.metric("Штатна потреба", total_required)
-
-if total_required > 0:
-    overall_percent = round((total_quantity / total_required) * 100, 1)
-else:
-    overall_percent = 0
-
+overall_percent = round((total_quantity/total_required)*100,1) if total_required>0 else 0
 col3.metric("Загальний % забезпечення", f"{overall_percent}%")
 
 # =====================================================
-# 5. ТАБЛИЦЯ
+# 6. ТАБЛИЦЯ
 # =====================================================
-
 display_table = region_summary.rename(columns={
-    "region_name": "Регіон",
-    "total_required": "Штатна потреба",
-    "total_quantity": "Наявність"
+    "region_name":"Регіон",
+    "total_required":"Штатна потреба",
+    "total_quantity":"Наявність"
 })[["Регіон","Штатна потреба","Наявність","Нестача","Надлишок","% забезпечення"]]
 
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
-
-# попередження
-critical_regions = region_summary[region_summary["% забезпечення"] < 50]
-if not critical_regions.empty:
+if (region_summary["% забезпечення"]<50).any():
     st.warning("⚠ Є регіони з критичним рівнем забезпечення (<50%)")
 
 # =====================================================
-# 6. ГРАФІК
+# 7. ГРАФІК
 # =====================================================
-
 st.subheader("Рейтинг регіонів за % забезпечення")
-
-chart_df = region_summary.sort_values("% забезпечення", ascending=False)
-st.bar_chart(
-    chart_df.set_index("region_name")["% забезпечення"]
-)
+st.bar_chart(region_summary.sort_values("% забезпечення", ascending=False).set_index("region_name")["% забезпечення"])
 
 # =====================================================
-# 7. КАРТА
+# 8. КАРТА
 # =====================================================
-
-with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
+with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
 region_name_map = {
-    "Київ": "Kyiv_city",
-    "Київська область": "Kyivska",
-    "Львівська область": "Lvivska",
-    "Одеська область": "Odeska",
-    "Харківська область": "Kharkivska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Полтавська область": "Poltavska",
-    "Сумська область": "Sumska",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Кіровоградська область": "Kirovohradska",
-    "Луганська область": "Luhanska",
-    "Миколаївська область": "Mykolaivska",
-    "Рівненська область": "Rivnenska",
-    "Тернопільська область": "Ternopilska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Черкаська область": "Cherkaska",
-    "Чернігівська область": "Chernihivska",
-    "Чернівецька область": "Chernivetska",
-    "Житомирська область": "Zhytomyrska"
+    "Київ": "Kyiv_city", "Київська область":"Kyivska", "Львівська область":"Lvivska",
+    "Одеська область":"Odeska", "Харківська область":"Kharkivska", "Дніпропетровська область":"Dnipropetrovska",
+    "Полтавська область":"Poltavska", "Сумська область":"Sumska", "Вінницька область":"Vinnytska",
+    "Волинська область":"Volynska","Закарпатська область":"Zakarpatska","Запорізька область":"Zaporizka",
+    "Івано-Франківська область":"Ivano-Frankivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
+    "Миколаївська область":"Mykolaivska","Рівненська область":"Rivnenska","Тернопільська область":"Ternopilska",
+    "Херсонська область":"Khersonska","Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska",
+    "Чернігівська область":"Chernihivska","Чернівецька область":"Chernivetska","Житомирська область":"Zhytomyrska"
 }
 
-coverage_dict = {}
-for ukr_name, eng_name in region_name_map.items():
-    value = region_summary.loc[
-        region_summary["region_name"] == ukr_name,
-        "% забезпечення"
-    ]
-    coverage_dict[eng_name] = float(value.values[0]) if not value.empty else 0
+coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+                 for ukr_name, eng_name in region_name_map.items()}
+
+def color_by_coverage(c):
+    return "#ffffff" if c==0 else "#d73027" if c<50 else "#f46d43" if c<75 else "#fee08b" if c<100 else "#1a9850"
 
 for feature in geojson_data["features"]:
-    eng_name = feature["properties"]["name"]
-    feature["properties"]["coverage"] = coverage_dict.get(eng_name, 0)
+    feature["properties"]["coverage"] = coverage_dict.get(feature["properties"]["name"],0)
 
-def color_by_coverage(coverage):
-    if coverage == 0:
-        return "#ffffff"
-    elif coverage < 50:
-        return "#d73027"
-    elif coverage < 75:
-        return "#f46d43"
-    elif coverage < 100:
-        return "#fee08b"
-    else:
-        return "#1a9850"
-
-m = folium.Map(
-    location=[49, 32],
-    zoom_start=6,
-    control_scale=True,
-    tiles="cartodbpositron"
-)
-
+m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 folium.GeoJson(
     geojson_data,
-    style_function=lambda feature: {
-        "fillColor": color_by_coverage(feature["properties"]["coverage"]),
-        "color": "black",
-        "weight": 1,
-        "fillOpacity": 0.75
-    }
+    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
+                              "color":"black","weight":1,"fillOpacity":0.75}
 ).add_to(m)
-
 st.subheader("Карта рівня забезпечення")
-st_folium(m, width=1000, height=650)
+st_folium(m,width=1000,height=650)
 
 # =====================================================
-# 8. ЕКСПОРТ В EXCEL
+# 9. ЕКСПОРТ В EXCEL
 # =====================================================
-
 def convert_to_excel(df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    out = io.BytesIO()
+    with pd.ExcelWriter(out, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="Звіт", index=False)
-    return output.getvalue()
-
-excel_data = convert_to_excel(display_table)
+    return out.getvalue()
 
 st.download_button(
     label="📥 Завантажити звіт в Excel",
-    data=excel_data,
+    data=convert_to_excel(display_table),
     file_name="zvit_po_regionakh.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
