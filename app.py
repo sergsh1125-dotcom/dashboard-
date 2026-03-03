@@ -6,102 +6,53 @@ import folium
 from streamlit_folium import st_folium
 from openpyxl.styles import PatternFill, Protection
 from openpyxl.worksheet.datavalidation import DataValidation
+import random
 
 st.set_page_config(page_title="Dashboard РХБЗ", layout="wide")
 st.title("Дашборд забезпечення засобами РХБ захисту")
 
 # =====================================================
-# 1. ШАБЛОН EXCEL
+# 1. СТВОРЕННЯ ПРИКЛАДНОГО ШАБЛОНУ
 # =====================================================
-def generate_template():
-    allowed_products = [
-        "спеціальна техніка",
-        "прилади РР",
-        "прилади ХР",
-        "протигази",
-        "респіратори",
-        "захисний одяг"
-    ]
+regions = [
+    "Київ","Вінницька область","Волинська область","Дніпропетровська область",
+    "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
+    "Івано-Франківська область","Київська область","Кіровоградська область","Луганська область",
+    "Львівська область","Миколаївська область","Одеська область","Полтавська область",
+    "Рівненська область","Сумська область","Тернопільська область","Харківська область",
+    "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
+    "Чернігівська область"
+]
 
-    allowed_regions = [
-        "Київ","Вінницька область","Волинська область","Дніпропетровська область",
-        "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
-        "Івано-Франківська область","Київська область","Кіровоградська область","Луганська область",
-        "Львівська область","Миколаївська область","Одеська область","Полтавська область",
-        "Рівненська область","Сумська область","Тернопільська область","Харківська область",
-        "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
-        "Чернігівська область"
-    ]
+products = [
+    "спеціальна техніка",
+    "прилади РР",
+    "прилади ХР",
+    "протигази",
+    "респіратори",
+    "захисний одяг"
+]
 
+def generate_example_excel():
+    data = []
+    for region in regions:
+        for product in products:
+            required = random.randint(50,200)
+            quantity = random.randint(0, required)
+            data.append([region, product, quantity, required])
+    df = pd.DataFrame(data, columns=["region_name","product_name","quantity","required_quantity"])
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # Основний лист
-        template_df = pd.DataFrame({
-            "region_name": [],
-            "product_name": [],
-            "quantity": [],
-            "required_quantity": []
-        })
-        template_df.to_excel(writer, sheet_name="Дані", index=False)
-
-        # Лист довідника
-        max_len = max(len(allowed_regions), len(allowed_products))
-        ref_df = pd.DataFrame({
-            "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
-            "Засоби": allowed_products + [""]*(max_len - len(allowed_products))
-        })
-        ref_df.to_excel(writer, sheet_name="Довідник", index=False)
-
-        workbook = writer.book
-        data_sheet = workbook["Дані"]
-
-        # Підсвітка заголовків
-        header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
-        for cell in data_sheet[1]:
-            cell.fill = header_fill
-            cell.protection = Protection(locked=True)
-
-        # Data Validation для регіонів
-        dv_region = DataValidation(
-            type="list",
-            formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
-            allow_blank=True
-        )
-        dv_region.add("A2:A500")
-        data_sheet.add_data_validation(dv_region)
-
-        # Data Validation для продуктів
-        dv_product = DataValidation(
-            type="list",
-            formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
-            allow_blank=True
-        )
-        dv_product.add("B2:B500")
-        data_sheet.add_data_validation(dv_product)
-
-        # Data Validation для чисел >=0
-        dv_number = DataValidation(
-            type="decimal",
-            operator="greaterThanOrEqual",
-            formula1="0",
-            allow_blank=True
-        )
-        dv_number.add("C2:D500")
-        data_sheet.add_data_validation(dv_number)
-
-        # Захист листа
-        data_sheet.protection.sheet = True
-
+        df.to_excel(writer, sheet_name="Дані", index=False)
     return output.getvalue()
 
-# Кнопка для завантаження шаблону
 st.sidebar.header("Excel шаблон")
-if st.sidebar.button("📄 Завантажити шаблон Excel"):
-    template_bytes = generate_template()
+if st.sidebar.button("📄 Завантажити приклад шаблону"):
+    excel_bytes = generate_example_excel()
     st.sidebar.download_button(
-        label="📥 Завантажити шаблон",
-        data=template_bytes,
-        file_name="template.xlsx",
+        label="📥 Завантажити приклад Excel",
+        data=excel_bytes,
+        file_name="example_filled_template.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -115,13 +66,11 @@ if uploaded_file is None:
 
 df = pd.read_excel(uploaded_file)
 df.columns = df.columns.str.strip().str.lower()
-
 required_columns = ["region_name","product_name","quantity","required_quantity"]
 if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
     st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
-
 for col in ["quantity","required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -131,7 +80,6 @@ for col in ["quantity","required_quantity"]:
 st.sidebar.header("Фільтри")
 selected_region = st.sidebar.selectbox("Регіон", ["Всі"] + sorted(df["region_name"].unique()))
 selected_product = st.sidebar.selectbox("Засіб РХБЗ", ["Всі"] + sorted(df["product_name"].unique()))
-
 filtered_df = df.copy()
 if selected_region != "Всі":
     filtered_df = filtered_df[filtered_df["region_name"]==selected_region]
@@ -173,11 +121,8 @@ display_table = region_summary.rename(columns={
     "total_required":"Штатна потреба",
     "total_quantity":"Наявність"
 })
-
-# Колонка '% забезпечення' в кінці
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
-
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
 if (region_summary["% забезпечення"]<50).any():
@@ -196,56 +141,44 @@ with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
 region_name_map = {
-    "Київ": "Kyiv_city",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Донецька область": "Donetska",
-    "Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska",
-    "Кіровоградська область": "Kirovohradska",
-    "Луганська область": "Luhanska",
-    "Львівська область": "Lvivska",
-    "Миколаївська область": "Mykolaivska",
-    "Одеська область": "Odeska",
-    "Полтавська область": "Poltavska",
-    "Рівненська область": "Rivnenska",
-    "Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska",
-    "Харківська область": "Kharkivska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Черкаська область": "Cherkaska",
-    "Чернівецька область": "Chernivetska",
+    "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
+    "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
+    "Закарпатська область": "Zakarpatska","Запорізька область": "Zaporizka","Івано-Франківська область": "Ivano-Frankivska",
+    "Київська область": "Kyivska","Кіровоградська область": "Kirovohradska","Луганська область": "Luhanska",
+    "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
+    "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
+    "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska","Чернівецька область": "Chernivetska",
     "Чернігівська область": "Chernihivska"
 }
 
-coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
-                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
-                 for ukr_name, eng_name in region_name_map.items()}
+coverage_dict = {
+    eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+    if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+    for ukr_name, eng_name in region_name_map.items()
+}
 
 def color_by_coverage(c):
-    if c<50:
-        return "#d73027"    # червоний
-    elif c<75:
-        return "#f46d43"    # помаранчевий
-    elif c<100:
-        return "#fee08b"    # жовтий
+    if c < 50:
+        return "#d73027"  # червоний
+    elif c < 75:
+        return "#f46d43"  # помаранчевий
+    elif c < 100:
+        return "#fee08b"  # жовтий
     else:
-        return "#1a9850"    # зелений
+        return "#1a9850"  # зелений
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
-
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
-                              "color":"black","weight":1,"fillOpacity":0.75}
+    style_function=lambda f: {
+        "fillColor": color_by_coverage(f["properties"].get("coverage", 0)),
+        "color": "black",
+        "weight": 1,
+        "fillOpacity": 0.75
+    }
 ).add_to(m)
 
-# Легенда
 legend_html = """
 <div style="
 position: fixed;
@@ -267,7 +200,6 @@ padding: 10px;
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
-
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=650)
 
