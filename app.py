@@ -23,6 +23,7 @@ def generate_template():
         "респіратори",
         "захисний одяг"
     ]
+
     allowed_regions = [
         "Київ","Вінницька область","Волинська область","Дніпропетровська область",
         "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
@@ -32,6 +33,7 @@ def generate_template():
         "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
         "Чернігівська область"
     ]
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         template_df = pd.DataFrame({
@@ -51,6 +53,7 @@ def generate_template():
 
         workbook = writer.book
         data_sheet = workbook["Дані"]
+
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         for cell in data_sheet[1]:
             cell.fill = header_fill
@@ -85,7 +88,7 @@ def generate_template():
 
     return output.getvalue()
 
-# Кнопка завантаження шаблону
+# Кнопка для завантаження шаблону
 st.sidebar.header("Excel шаблон")
 if st.sidebar.button("📄 Завантажити шаблон Excel"):
     template_bytes = generate_template()
@@ -106,11 +109,13 @@ if uploaded_file is None:
 
 df = pd.read_excel(uploaded_file)
 df.columns = df.columns.str.strip().str.lower()
+
 required_columns = ["region_name","product_name","quantity","required_quantity"]
 if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
     st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
+
 for col in ["quantity","required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -182,11 +187,6 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-import folium
-from folium.features import GeoJsonTooltip
-from streamlit_folium import st_folium
-
-# Словник відповідності українських назв до geojson
 region_name_map = {
     "Київ":"Kyiv_city","Вінницька область":"Vinnytska","Волинська область":"Volynska",
     "Дніпропетровська область":"Dnipropetrovska","Донецька область":"Donetska","Житомирська область":"Zhytomyrska",
@@ -199,61 +199,48 @@ region_name_map = {
     "Чернігівська область":"Chernihivska","Автономна Республіка Крим":"Crimea"
 }
 
-# Створюємо словник покриття
 coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
                  if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
                  for ukr_name, eng_name in region_name_map.items()}
 
 def color_by_coverage(c):
-    if c>=100: return "#1a9850"    # зелений
-    elif c>=75: return "#fee08b"   # жовтий
-    elif c>=50: return "#f46d43"   # помаранчевий
-    else: return "#d73027"         # червоний
+    if c>=100: return "#1a9850"
+    elif c>=75: return "#fee08b"
+    elif c>=50: return "#f46d43"
+    else: return "#d73027"
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 
-# Функція стилю з затемненням для невибраного регіону
 def style_function(feature):
     eng_name = feature["properties"]["name"]
     coverage = coverage_dict.get(eng_name,0)
     if selected_region != "Всі":
         ukr_name_list = [k for k,v in region_name_map.items() if v==eng_name]
         if not ukr_name_list or ukr_name_list[0] != selected_region:
-            return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}  # затемнені
+            return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}
     return {"fillColor":color_by_coverage(coverage),"color":"black","weight":1,"fillOpacity":0.75}
 
-# Tooltip з назвою регіону і % забезпечення
-tooltip = GeoJsonTooltip(
-    fields=["name"],
-    aliases=["Регіон:"],
-    labels=True,
-    sticky=True,
-    localize=True,
-    style=("background-color: white; color: #333333; font-size: 12px; padding: 5px;")
-)
+tooltip_function = lambda feature: f"{[k for k,v in region_name_map.items() if v==feature['properties']['name']][0]}: {coverage_dict.get(feature['properties']['name'],0):.1f}%"
 
-# Додаємо GeoJson
 folium.GeoJson(
     geojson_data,
     style_function=style_function,
-    tooltip=tooltip
+    tooltip=folium.GeoJsonTooltip(fields=[], aliases=[], labels=False, sticky=True, localize=True, parse_html=True, 
+                                  style="background-color:white;font-size:12px;padding:5px;", tooltip=tooltip_function)
 ).add_to(m)
 
-# Постійні підписи назв регіонів
+# Постиійні назви (центри полігонів повинні бути у geojson у властивості "center": [lon,lat])
 for feature in geojson_data["features"]:
     eng_name = feature["properties"]["name"]
-    coords = feature["properties"].get("center")  # координати центру в geojson
+    coords = feature["properties"].get("center")
     if coords:
         ukr_name_list = [k for k,v in region_name_map.items() if v==eng_name]
         if ukr_name_list:
             folium.map.Marker(
                 location=[coords[1],coords[0]],
-                icon=folium.DivIcon(
-                    html=f"""<div style="font-size:10pt; font-weight:bold; color:#000">{ukr_name_list[0]}</div>"""
-                )
+                icon=folium.DivIcon(html=f"""<div style="font-size:10pt; font-weight:bold; color:#000">{ukr_name_list[0]}</div>""")
             ).add_to(m)
 
-# Легенда з квадратиками і цифрами, зверху вниз: зелений -> жовтий -> помаранч -> червоний
 legend_html = """
 <div style="
 position: fixed; bottom: 50px; left: 50px;
