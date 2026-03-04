@@ -139,7 +139,8 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
-
+st.write(geojson_data["features"][0]["properties"])
+st.stop()
 region_name_map = {
     "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
     "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
