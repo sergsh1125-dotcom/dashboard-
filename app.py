@@ -135,7 +135,7 @@ st.subheader("Рейтинг регіонів за % забезпечення")
 st.bar_chart(region_summary.sort_values("% забезпечення", ascending=False).set_index("region_name")["% забезпечення"])
 
 # =====================================================
-# 8. КАРТА
+# 8. КАРТА (ПРАВИЛЬНА ВЕРСІЯ)
 # =====================================================
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
@@ -148,63 +148,76 @@ region_name_map = {
     "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
     "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
     "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska","Чернівецька область": "Chernivetska",
-    "Чернігівська область": "Chernihivska"
+    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska",
+    "Чернівецька область": "Chernivetska","Чернігівська область": "Chernihivska"
 }
 
-coverage_dict = {
-    eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
-    if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
-    for ukr_name, eng_name in region_name_map.items()
-}
+# Формуємо словник % забезпечення
+coverage_dict = {}
+for ukr_name, eng_name in region_name_map.items():
+    row = region_summary[region_summary["region_name"] == ukr_name]
+    if not row.empty:
+        coverage_dict[eng_name] = float(row["% забезпечення"].values[0])
+    else:
+        coverage_dict[eng_name] = 0
 
+# 🔴 ОСНОВНЕ ВИПРАВЛЕННЯ — записуємо coverage у GeoJSON
+for feature in geojson_data["features"]:
+    region_id = feature["properties"]["id"]
+    feature["properties"]["coverage"] = coverage_dict.get(region_id, 0)
+
+# Функція кольору
 def color_by_coverage(c):
     if c < 50:
-        return "#d73027"  # червоний
+        return "#d73027"
     elif c < 75:
-        return "#f46d43"  # помаранчевий
+        return "#f46d43"
     elif c < 100:
-        return "#fee08b"  # жовтий
+        return "#fee08b"
     else:
-        return "#1a9850"  # зелений
+        return "#1a9850"
 
-m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron")
+
 folium.GeoJson(
     geojson_data,
     style_function=lambda f: {
-        "fillColor": color_by_coverage(f["properties"].get("coverage", 0)),
+        "fillColor": color_by_coverage(f["properties"]["coverage"]),
         "color": "black",
         "weight": 1,
-        "fillOpacity": 0.75
-    }
+        "fillOpacity": 0.8
+    },
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name","coverage"],
+        aliases=["Регіон:","% забезпечення:"],
+        localize=True
+    )
 ).add_to(m)
 
-# Легенда з правильним відображенням %
+# Легенда
 legend_html = """
 <div style="
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 180px;
-height: 150px;
+width: 190px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
 font-size:14px;
 padding: 10px;
 ">
-<b>Легенда % забезпечення</b><br>
-<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> &lt;50&#37;<br>
-<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74&#37;<br>
-<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99&#37;<br>
-<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100&#37;
+<b>Легенда</b><br>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> &lt;50%<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
+<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
 
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=650)
-
 # =====================================================
 # 9. ЕКСПОРТ В EXCEL
 # =====================================================
