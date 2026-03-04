@@ -2,17 +2,71 @@ import streamlit as st
 import pandas as pd
 import folium
 import json
+import io
 from streamlit_folium import st_folium
 from branca.element import MacroElement
 from jinja2 import Template
+from openpyxl import Workbook
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.styles import PatternFill, Protection
 
 st.set_page_config(layout="wide")
 st.title("Дашборд забезпеченості по регіонах")
 
 # =========================
-# ЗАВАНТАЖЕННЯ ФАЙЛУ
+# КНОПКА ЗАВАНТАЖЕННЯ ШАБЛОНУ
 # =========================
-uploaded_file = st.file_uploader("Завантаж Excel файл", type=["xlsx"])
+def generate_template():
+    allowed_products = [
+        "спеціальна техніка",
+        "прилади РР",
+        "прилади ХР",
+        "протигази",
+        "респіратори",
+        "захисний одяг"
+    ]
+
+    allowed_regions = [
+        "Київ", "Київська область", "Львівська область", "Одеська область",
+        "Харківська область", "Дніпропетровська область", "Полтавська область",
+        "Сумська область", "Вінницька область", "Волинська область",
+        "Закарпатська область", "Запорізька область", "Івано-Франківська область",
+        "Кіровоградська область", "Луганська область", "Миколаївська область",
+        "Рівненська область", "Тернопільська область", "Херсонська область",
+        "Хмельницька область", "Черкаська область", "Чернігівська область",
+        "Чернівецька область", "Житомирська область", "Донецька область"
+    ]
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        template_df = pd.DataFrame({
+            "Регіон": [],
+            "Виріб": [],
+            "Наявна кількість": [],
+            "Потреба": []
+        })
+        template_df.to_excel(writer, sheet_name="Дані", index=False)
+
+        # Довідник
+        ref_df = pd.DataFrame({
+            "Регіони": allowed_regions + [""] * (len(allowed_products) - len(allowed_regions)),
+            "Засоби": allowed_products + [""] * (len(allowed_regions) - len(allowed_products))
+        })
+        ref_df.to_excel(writer, sheet_name="Довідник", index=False)
+    return output.getvalue()
+
+st.sidebar.header("Шаблон Excel")
+st.sidebar.download_button(
+    label="📥 Завантажити шаблон Excel",
+    data=generate_template(),
+    file_name="template.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+# =========================
+# ЗАВАНТАЖЕННЯ ДАНИХ
+# =========================
+uploaded_file = st.sidebar.file_uploader("Завантаж Excel файл", type=["xlsx"])
 
 if uploaded_file is not None:
     df = pd.read_excel(uploaded_file)
@@ -56,7 +110,7 @@ if uploaded_file is not None:
         st.stop()
 
     # =========================
-    # РОЗРАХУНОК %
+    # ПЕРЕВІРКА ТИПІВ
     # =========================
     df["available_quantity"] = pd.to_numeric(df["available_quantity"], errors="coerce").fillna(0)
     df["required_quantity"] = pd.to_numeric(df["required_quantity"], errors="coerce").fillna(0)
@@ -66,26 +120,22 @@ if uploaded_file is not None:
         "required_quantity": "sum"
     }).reset_index()
 
-    grouped["coverage"] = (grouped["available_quantity"] / grouped["required_quantity"].replace(0, 1)) * 100
+    grouped["coverage"] = (grouped["available_quantity"] / grouped["required_quantity"].replace(0,1)) * 100
 
     # =========================
-    # ЗАВАНТАЖЕННЯ GEOJSON
+    # GEOJSON
     # =========================
     with open("ukraine_regions.geojson", "r", encoding="utf-8") as f:
         geojson_data = json.load(f)
 
-    # додаємо coverage у geojson
     for feature in geojson_data["features"]:
         region_name = feature["properties"]["name"].strip().lower()
         match = grouped[grouped["region"].str.strip().str.lower() == region_name]
         if not match.empty:
-            feature["properties"]["coverage"] = round(match.iloc[0]["coverage"], 1)
+            feature["properties"]["coverage"] = round(match.iloc[0]["coverage"],1)
         else:
             feature["properties"]["coverage"] = 0
 
-    # =========================
-    # ФУНКЦІЯ КОЛЬОРУ
-    # =========================
     def color_by_coverage(value):
         if value < 50:
             return "#d73027"
@@ -97,21 +147,21 @@ if uploaded_file is not None:
             return "#1a9850"
 
     # =========================
-    # СТВОРЕННЯ КАРТИ
+    # КАРТА
     # =========================
-    m = folium.Map(location=[48.5, 31], zoom_start=6, tiles="cartodbpositron")
+    m = folium.Map(location=[48.5,31], zoom_start=6, tiles="cartodbpositron")
 
     folium.GeoJson(
         geojson_data,
         style_function=lambda f: {
-            "fillColor": color_by_coverage(f["properties"].get("coverage", 0)),
+            "fillColor": color_by_coverage(f["properties"].get("coverage",0)),
             "color": "black",
             "weight": 1,
-            "fillOpacity": 0.7
+            "fillOpacity":0.7
         },
         tooltip=folium.GeoJsonTooltip(
-            fields=["name", "coverage"],
-            aliases=["Регіон:", "Забезпеченість (%):"],
+            fields=["name","coverage"],
+            aliases=["Регіон:","Забезпеченість (%)"],
             localize=True
         )
     ).add_to(m)
@@ -136,23 +186,17 @@ if uploaded_file is not None:
     box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
     ">
     <b>Легенда</b><br><br>
-
     <div><span style="background:#d73027;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> < 50%</div>
     <div><span style="background:#f46d43;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> 50–74%</div>
     <div><span style="background:#fee08b;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> 75–99%</div>
     <div><span style="background:#1a9850;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> ≥ 100%</div>
-
     </div>
     {% endmacro %}
     """)
-
     m.add_child(legend)
 
-    # =========================
-    # ВІДОБРАЖЕННЯ
-    # =========================
     st.subheader("Карта рівня забезпечення")
     st_folium(m, width=1200, height=650)
 
 else:
-    st.info("Завантаж Excel файл для відображення карти.")
+    st.info("Завантаж Excel файл або скористайся шаблоном.")
