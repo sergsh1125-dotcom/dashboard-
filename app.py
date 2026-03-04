@@ -132,7 +132,7 @@ region_summary["Надлишок"] = (region_summary["total_quantity"] - row["to
 # =====================================================
 total_quantity = int(region_summary["total_quantity"].sum())
 total_required = int(region_summary["total_required"].sum())
-col1,col2,col3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 col1.metric("Наявність", total_quantity)
 col2.metric("Штатна потреба", total_required)
 overall_percent = round((total_quantity/total_required)*100,1) if total_required>0 else 0
@@ -146,8 +146,11 @@ display_table = region_summary.rename(columns={
     "total_required":"Штатна потреба",
     "total_quantity":"Наявність"
 })
+
+# Колонка '% забезпечення' в кінці
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
+
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
 if (region_summary["% забезпечення"]<50).any():
@@ -162,66 +165,51 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
+import folium
+from folium.features import GeoJsonTooltip
+
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-# coverage_dict
-region_name_map = {
-    "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska","Запорізька область": "Zaporizka","Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska","Кіровоградська область": "Kirovohradska","Луганська область": "Luhanska",
-    "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
-    "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska","Чернівецька область": "Chernivetska",
-    "Чернігівська область": "Chernihivska"
-}
-coverage_dict = {v: float(region_summary.loc[region_summary["region_name"]==k,"% забезпечення"].values[0])
-                 if not region_summary.loc[region_summary["region_name"]==k].empty else 0
-                 for k,v in region_name_map.items()}
-
+# Колірна шкала
 def color_by_coverage(c):
-    if c>=100: return "#1a9850"
-    elif c>=75: return "#fee08b"
-    elif c>=51: return "#f46d43"
-    else: return "#d73027"
-
-def style_function(feature):
-    feature_name = feature["properties"]["name"]
-    val = coverage_dict.get(feature_name, 0)
-    if selected_region != "Всі" and feature_name != region_name_map[selected_region]:
-        return {"fillColor":"#a0cbe8","color":"black","weight":1,"fillOpacity":0.5}
-    return {"fillColor": color_by_coverage(val), "color":"black","weight":1,"fillOpacity":0.75}
-
-def tooltip_function(feature):
-    feature_name = feature["properties"]["name"]
-    val = coverage_dict.get(feature_name, 0)
-    return f"{feature_name}\n% забезпечення: {val}%"
+    if c >= 100: return "#1a9850"      # зелений
+    elif c >= 75: return "#fee08b"      # жовтий
+    elif c >= 51: return "#f46d43"      # помаранчевий
+    else: return "#d73027"              # червоний
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+
+# GeoJson з підказкою
 folium.GeoJson(
     geojson_data,
-    style_function=style_function,
-    tooltip=folium.GeoJsonTooltip(
-        fields=[],
-        aliases=[],
-        labels=False,
-        sticky=True,
+    style_function=lambda f: {
+        "fillColor": color_by_coverage(
+            region_summary.loc[region_summary["region_name"]==f["properties"]["name"],"% забезпечення"].values[0]
+            if not region_summary.loc[region_summary["region_name"]==f["properties"]["name"]].empty else 0
+        ),
+        "color":"black",
+        "weight":1,
+        "fillOpacity":0.75
+    },
+    tooltip=GeoJsonTooltip(
+        fields=["name"],
+        aliases=["Регіон:"],
         localize=True,
-        toLocaleString=False,
-        text=lambda f: tooltip_function(f)
+        labels=True,
+        sticky=True,
+        toLocaleString=True
     )
 ).add_to(m)
 
-# Легенда з діапазонами чисел %
+# Легенда з кольоровими квадратиками та діапазонами %
 legend_html = """
 <div style="
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 180px;
-height: 140px;
+width: 150px;
+height: 130px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
