@@ -15,14 +15,9 @@ st.title("Дашборд забезпечення засобами РХБ зах
 # =====================================================
 def generate_template():
     allowed_products = [
-        "спеціальна техніка",
-        "прилади РР",
-        "прилади ХР",
-        "протигази",
-        "респіратори",
-        "захисний одяг"
+        "спеціальна техніка","прилади РР","прилади ХР","протигази",
+        "респіратори","захисний одяг"
     ]
-
     allowed_regions = [
         "Київ","Вінницька область","Волинська область","Дніпропетровська область",
         "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
@@ -37,10 +32,7 @@ def generate_template():
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         # Основний лист
         template_df = pd.DataFrame({
-            "region_name": [],
-            "product_name": [],
-            "quantity": [],
-            "required_quantity": []
+            "region_name": [], "product_name": [], "quantity": [], "required_quantity": []
         })
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
@@ -62,30 +54,22 @@ def generate_template():
             cell.protection = Protection(locked=True)
 
         # Data Validation для регіонів
-        dv_region = DataValidation(
-            type="list",
-            formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
-            allow_blank=True
-        )
+        dv_region = DataValidation(type="list",
+                                   formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
+                                   allow_blank=True)
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
         # Data Validation для продуктів
-        dv_product = DataValidation(
-            type="list",
-            formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
-            allow_blank=True
-        )
+        dv_product = DataValidation(type="list",
+                                    formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
+                                    allow_blank=True)
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
         # Data Validation для чисел >=0
-        dv_number = DataValidation(
-            type="decimal",
-            operator="greaterThanOrEqual",
-            formula1="0",
-            allow_blank=True
-        )
+        dv_number = DataValidation(type="decimal", operator="greaterThanOrEqual",
+                                   formula1="0", allow_blank=True)
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
@@ -115,13 +99,11 @@ if uploaded_file is None:
 
 df = pd.read_excel(uploaded_file)
 df.columns = df.columns.str.strip().str.lower()
-
 required_columns = ["region_name","product_name","quantity","required_quantity"]
 if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
     st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
-
 for col in ["quantity","required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -141,11 +123,10 @@ if selected_product != "Всі":
 # =====================================================
 # 4. АГРЕГАЦІЯ
 # =====================================================
-region_summary = (
-    filtered_df.groupby("region_name")
-    .agg(total_quantity=("quantity","sum"), total_required=("required_quantity","sum"))
-    .reset_index()
-)
+region_summary = (filtered_df.groupby("region_name")
+                  .agg(total_quantity=("quantity","sum"),
+                       total_required=("required_quantity","sum"))
+                  .reset_index())
 region_summary["% забезпечення"] = region_summary.apply(
     lambda row: round((row["total_quantity"]/row["total_required"])*100,1)
     if row["total_required"]>0 else 0,
@@ -169,11 +150,8 @@ col3.metric("Загальний % забезпечення", f"{overall_percent}
 # 6. ТАБЛИЦЯ
 # =====================================================
 display_table = region_summary.rename(columns={
-    "region_name":"Регіон",
-    "total_required":"Штатна потреба",
-    "total_quantity":"Наявність"
+    "region_name":"Регіон","total_required":"Штатна потреба","total_quantity":"Наявність"
 })
-
 # Колонка '% забезпечення' в кінці
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
@@ -195,54 +173,31 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-region_name_map = {
-    "Київ": "Kyiv_city",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Донецька область": "Donetska",
-    "Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska",
-    "Кіровоградська область": "Kirovohradska",
-    "Луганська область": "Luhanska",
-    "Львівська область": "Lvivska",
-    "Миколаївська область": "Mykolaivska",
-    "Одеська область": "Odeska",
-    "Полтавська область": "Poltavska",
-    "Рівненська область": "Rivnenska",
-    "Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska",
-    "Харківська область": "Kharkivska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Черкаська область": "Cherkaska",
-    "Чернівецька область": "Chernivetska",
-    "Чернігівська область": "Chernihivska"
-}
-
-coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
-                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
-                 for ukr_name, eng_name in region_name_map.items()}
+# Присвоюємо coverage для всіх областей
+for feature in geojson_data["features"]:
+    props = feature.get("properties",{})
+    ukr_name = props.get("name","").strip()
+    match = region_summary[region_summary["region_name"].str.strip()==ukr_name]
+    props["coverage"] = float(match["% забезпечення"].values[0]) if not match.empty else 0
 
 def color_by_coverage(c):
-    if c<50:
-        return "#d73027"    # червоний
-    elif c<75:
-        return "#f46d43"    # помаранчевий
-    elif c<100:
-        return "#fee08b"    # жовтий
-    else:
-        return "#1a9850"    # зелений
+    if c<50: return "#d73027"
+    elif c<75: return "#f46d43"
+    elif c<100: return "#fee08b"
+    else: return "#1a9850"
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
-
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
-                              "color":"black","weight":1,"fillOpacity":0.75}
+    style_function=lambda f: {
+        "fillColor": color_by_coverage(f["properties"].get("coverage",0)),
+        "color":"black","weight":1,"fillOpacity":0.75
+    },
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name","coverage"],
+        aliases=["Регіон:","Забезпеченість (%)"],
+        localize=True
+    )
 ).add_to(m)
 
 # Легенда
@@ -267,7 +222,6 @@ padding: 10px;
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
-
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=650)
 
