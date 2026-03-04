@@ -179,9 +179,13 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
+# =====================================================
+# 8. КАРТА
+# =====================================================
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
+# Словник відповідності українських назв до geojson
 region_name_map = {
     "Київ":"Kyiv_city","Вінницька область":"Vinnytska","Волинська область":"Volynska",
     "Дніпропетровська область":"Dnipropetrovska","Донецька область":"Donetska","Житомирська область":"Zhytomyrska",
@@ -191,9 +195,10 @@ region_name_map = {
     "Полтавська область":"Poltavska","Рівненська область":"Rivnenska","Сумська область":"Sumska",
     "Тернопільська область":"Ternopilska","Харківська область":"Kharkivska","Херсонська область":"Khersonska",
     "Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska","Чернівецька область":"Chernivetska",
-    "Чернігівська область":"Chernihivska"
+    "Чернігівська область":"Chernihivska","Автономна Республіка Крим":"Crimea"  # додали Крим
 }
 
+# Створюємо словник покриття
 coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
                  if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
                  for ukr_name, eng_name in region_name_map.items()}
@@ -206,13 +211,14 @@ def color_by_coverage(c):
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 
-# Безпечний style_function
+# Функція стилю з затемненням для невибраного регіону
 def style_function(feature):
-    coverage = coverage_dict.get(feature["properties"]["name"],0)
+    eng_name = feature["properties"]["name"]
+    coverage = coverage_dict.get(eng_name,0)
     if selected_region != "Всі":
-        ukr_name_list = [k for k,v in region_name_map.items() if v==feature["properties"]["name"]]
-        if ukr_name_list and ukr_name_list[0]!=selected_region:
-            return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}
+        ukr_name_list = [k for k,v in region_name_map.items() if v==eng_name]
+        if not ukr_name_list or ukr_name_list[0] != selected_region:
+            return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}  # затемнені
     return {"fillColor":color_by_coverage(coverage),"color":"black","weight":1,"fillOpacity":0.75}
 
 # Tooltip з % забезпечення
@@ -230,26 +236,28 @@ folium.GeoJson(
     tooltip=tooltip
 ).add_to(m)
 
-# Підписи регіонів з точним %
+# Підписи з назвою регіону
 for feature in geojson_data["features"]:
     eng_name = feature["properties"]["name"]
-    coverage = coverage_dict.get(eng_name,0)
-    coords = feature["properties"].get("center")  # потрібно, щоб у geojson був центр
+    coords = feature["properties"].get("center")  # у geojson мають бути координати центру
     if coords:
-        folium.map.Marker(
-            location=[coords[1],coords[0]],
-            icon=folium.DivIcon(html=f"""<div style="font-size:10pt; font-weight:bold">{coverage}%</div>""")
-        ).add_to(m)
+        ukr_name_list = [k for k,v in region_name_map.items() if v==eng_name]
+        if ukr_name_list:
+            folium.map.Marker(
+                location=[coords[1],coords[0]],
+                icon=folium.DivIcon(
+                    html=f"""<div style="font-size:10pt; font-weight:bold">{ukr_name_list[0]}</div>"""
+                )
+            ).add_to(m)
 
-# Легенда з квадратиками і цифрами
+# Легенда з квадратиками і цифрами %
 legend_html = """
 <div style="
 position: fixed; bottom: 50px; left: 50px;
-width: 120px; height: 120px;
+width: 140px; height: 120px;
 background-color: white; border:2px solid grey;
-z-index:9999; font-size:14px; padding: 10px;
+z-index:9999; font-size:12px; padding: 10px;
 ">
-<b>Легенда % забезпечення</b><br>
 <i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
 <i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
 <i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
