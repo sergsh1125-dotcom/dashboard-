@@ -192,92 +192,125 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
-with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
-    geojson_data = json.load(f)
+import folium
+from folium.features import GeoJsonTooltip
+import streamlit as st
+from streamlit_folium import st_folium
 
-region_name_map = {
-    "Київ": "Kyiv_city",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Донецька область": "Donetska",
-    "Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska",
-    "Кіровоградська область": "Kirovohradska",
-    "Луганська область": "Luhanska",
-    "Львівська область": "Lvivska",
-    "Миколаївська область": "Mykolaivska",
-    "Одеська область": "Odeska",
-    "Полтавська область": "Poltavska",
-    "Рівненська область": "Rivnenska",
-    "Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska",
-    "Харківська область": "Kharkivska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Черкаська область": "Cherkaska",
-    "Чернівецька область": "Chernivetska",
-    "Чернігівська область": "Chernihivska"
-}
+st.subheader("Карта стану забезпечення засобами РХБ захисту")
 
-# Додаємо coverage у всі області, щоб не було помилок
-for f in geojson_data["features"]:
-    eng_name = f["properties"]["name"]
-    ukr_name = [k for k,v in region_name_map.items() if v==eng_name]
-    if ukr_name:
-        val = region_summary.loc[region_summary["region_name"]==ukr_name[0], "% забезпечення"]
-        f["properties"]["coverage"] = float(val.values[0]) if not val.empty else 0
+# ---- Функція визначення кольору ----
+def color_by_coverage(value):
+    if value is None:
+        return "#cccccc"
+    elif value < 40:
+        return "#d73027"  # червоний
+    elif value < 70:
+        return "#fee08b"  # жовтий
     else:
-        f["properties"]["coverage"] = 0
+        return "#1a9850"  # зелений
 
-def color_by_coverage(c):
-    if c<50: return "#d73027"
-    elif c<75: return "#f46d43"
-    elif c<100: return "#fee08b"
-    else: return "#1a9850"
 
-m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+# ---- Стиль регіонів ----
+def style_function(feature):
+    region_name = feature["properties"]["ukr_name"]
+    coverage = feature["properties"]["coverage"]
 
+    # Якщо вибрано один регіон
+    if selected_region != "Всі":
+        if region_name != selected_region:
+            return {
+                "fillColor": "#d9d9d9",
+                "color": "#aaaaaa",
+                "weight": 1,
+                "fillOpacity": 0.25
+            }
+        else:
+            return {
+                "fillColor": color_by_coverage(coverage),
+                "color": "black",
+                "weight": 3,
+                "fillOpacity": 0.9
+            }
+
+    # Якщо вибрано "Всі"
+    return {
+        "fillColor": color_by_coverage(coverage),
+        "color": "black",
+        "weight": 1,
+        "fillOpacity": 0.75
+    }
+
+
+# ---- Створення карти ----
+m = folium.Map(
+    location=[48.5, 31.0],
+    zoom_start=6,
+    tiles="cartodbpositron"
+)
+
+# ---- GeoJson ----
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
-                              "color":"black","weight":1,"fillOpacity":0.75},
-    tooltip=folium.GeoJsonTooltip(
-        fields=["name","coverage"],
-        aliases=["Регіон:","% забезпечення:"],
-        localize=True,
-        labels=True,
-        sticky=True
+    style_function=style_function,
+    tooltip=GeoJsonTooltip(
+        fields=["ukr_name", "coverage"],
+        aliases=["Регіон:", "Забезпечення (%):"],
+        localize=True
     )
 ).add_to(m)
 
-# Легенда
+
+# ---- Постійні підписи регіонів ----
+for feature in geojson_data["features"]:
+    name = feature["properties"]["ukr_name"]
+    coords = feature["geometry"]["coordinates"]
+
+    # Центр полігону
+    if feature["geometry"]["type"] == "Polygon":
+        lon = sum([p[0] for p in coords[0]]) / len(coords[0])
+        lat = sum([p[1] for p in coords[0]]) / len(coords[0])
+    else:
+        continue
+
+    folium.Marker(
+        location=[lat, lon],
+        icon=folium.DivIcon(
+            html=f"""
+            <div style="
+                font-size:8pt;
+                font-weight:bold;
+                color:black;
+                text-align:center;
+            ">
+                {name}
+            </div>
+            """
+        )
+    ).add_to(m)
+
+
+# ---- Легенда ----
 legend_html = """
 <div style="
-position: fixed;
-bottom: 50px;
-left: 50px;
-width: 190px;
-height: 150px;
-background-color: white;
-border:2px solid grey;
-z-index:9999;
+position: fixed; 
+bottom: 30px; left: 30px; width: 140px; height: 120px; 
+background-color: white; 
+border:2px solid grey; 
+z-index:9999; 
 font-size:14px;
-padding: 10px;
+padding:10px;
 ">
-<b>Легенда % забезпечення</b><br>
-■ <span style='color:#d73027;'>червоний:</span> <50%<br>
-■ <span style='color:#f46d43;'>помаранчевий:</span> 50–74%<br>
-■ <span style='color:#fee08b;'>жовтий:</span> 75–99%<br>
-■ <span style='color:#1a9850;'>зелений:</span> ≥100%
+<b>Легенда</b><br><br>
+<div><span style="background:#d73027;width:15px;height:15px;display:inline-block;"></span> 0–39%</div>
+<div><span style="background:#fee08b;width:15px;height:15px;display:inline-block;"></span> 40–69%</div>
+<div><span style="background:#1a9850;width:15px;height:15px;display:inline-block;"></span> 70–100%</div>
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
 
-st.subheader("Карта рівня забезпечення")
+
+# ---- Вивід у Streamlit ----
 st_folium(m, width=1000, height=650)
 
 # =====================================================
