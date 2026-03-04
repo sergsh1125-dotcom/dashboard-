@@ -192,6 +192,10 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
+import json
+
+with open("ukraine_regions.geojson", "r", encoding="utf-8") as f:
+    geojson_data = json.load(f)
 import folium
 from folium.features import GeoJsonTooltip
 import streamlit as st
