@@ -15,9 +15,10 @@ st.title("Дашборд забезпечення засобами РХБ зах
 # =====================================================
 def generate_template():
     allowed_products = [
-        "спеціальна техніка", "прилади РР", "прилади ХР",
-        "протигази", "респіратори", "захисний одяг"
+        "спеціальна техніка","прилади РР","прилади ХР",
+        "протигази","респіратори","захисний одяг"
     ]
+
     allowed_regions = [
         "Київ","Вінницька область","Волинська область","Дніпропетровська область",
         "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
@@ -30,43 +31,63 @@ def generate_template():
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        # Основний лист
         template_df = pd.DataFrame({
             "region_name": [], "product_name": [], "quantity": [], "required_quantity": []
         })
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
+        # Лист довідника
         max_len = max(len(allowed_regions), len(allowed_products))
         ref_df = pd.DataFrame({
-            "Регіони": allowed_regions + [""]*(max_len-len(allowed_regions)),
-            "Засоби": allowed_products + [""]*(max_len-len(allowed_products))
+            "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
+            "Засоби": allowed_products + [""]*(max_len - len(allowed_products))
         })
         ref_df.to_excel(writer, sheet_name="Довідник", index=False)
 
         workbook = writer.book
         data_sheet = workbook["Дані"]
+
+        # Підсвітка заголовків
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         for cell in data_sheet[1]:
             cell.fill = header_fill
             cell.protection = Protection(locked=True)
 
-        dv_region = DataValidation(type="list",
-                                   formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}", allow_blank=True)
+        # Data Validation для регіонів
+        dv_region = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
+            allow_blank=True
+        )
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
-        dv_product = DataValidation(type="list",
-                                    formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}", allow_blank=True)
+        # Data Validation для продуктів
+        dv_product = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
+            allow_blank=True
+        )
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
-        dv_number = DataValidation(type="decimal", operator="greaterThanOrEqual", formula1="0", allow_blank=True)
+        # Data Validation для чисел >=0
+        dv_number = DataValidation(
+            type="decimal",
+            operator="greaterThanOrEqual",
+            formula1="0",
+            allow_blank=True
+        )
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
+        # Захист листа
         data_sheet.protection.sheet = True
 
     return output.getvalue()
 
+# Кнопка для завантаження шаблону
 st.sidebar.header("Excel шаблон")
 if st.sidebar.button("📄 Завантажити шаблон Excel"):
     template_bytes = generate_template()
@@ -111,34 +132,42 @@ if selected_product != "Всі":
 # =====================================================
 # 4. АГРЕГАЦІЯ
 # =====================================================
-region_summary = filtered_df.groupby("region_name").agg(
-    total_quantity=("quantity","sum"),
-    total_required=("required_quantity","sum")
-).reset_index()
-region_summary["% забезпечення"] = region_summary.apply(
-    lambda r: round((r["total_quantity"]/r["total_required"])*100,1) if r["total_required"]>0 else 0, axis=1
+region_summary = (
+    filtered_df.groupby("region_name")
+    .agg(total_quantity=("quantity","sum"), total_required=("required_quantity","sum"))
+    .reset_index()
 )
-region_summary["Нестача"] = (region_summary["total_required"]-region_summary["total_quantity"]).clip(lower=0)
-region_summary["Надлишок"] = (region_summary["total_quantity"]-region_summary["total_required"]).clip(lower=0)
+region_summary["% забезпечення"] = region_summary.apply(
+    lambda row: round((row["total_quantity"]/row["total_required"])*100,1)
+    if row["total_required"]>0 else 0,
+    axis=1
+)
+region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).clip(lower=0)
+region_summary["Надлишок"] = (region_summary["total_quantity"] - region_summary["total_required"]).clip(lower=0)
 
 # =====================================================
 # 5. KPI
 # =====================================================
+total_quantity = int(region_summary["total_quantity"].sum())
+total_required = int(region_summary["total_required"].sum())
 col1,col2,col3 = st.columns(3)
-col1.metric("Наявність", int(region_summary["total_quantity"].sum()))
-col2.metric("Штатна потреба", int(region_summary["total_required"].sum()))
-overall_percent = round((region_summary["total_quantity"].sum()/region_summary["total_required"].sum())*100,1) \
-                  if region_summary["total_required"].sum()>0 else 0
+col1.metric("Наявність", total_quantity)
+col2.metric("Штатна потреба", total_required)
+overall_percent = round((total_quantity/total_required)*100,1) if total_required>0 else 0
 col3.metric("Загальний % забезпечення", f"{overall_percent}%")
 
 # =====================================================
 # 6. ТАБЛИЦЯ
 # =====================================================
-display_table = region_summary.rename(columns={"region_name":"Регіон","total_required":"Штатна потреба","total_quantity":"Наявність"})
-cols = [c for c in display_table.columns if c!="% забезпечення"] + ["% забезпечення"]
+display_table = region_summary.rename(columns={
+    "region_name":"Регіон",
+    "total_required":"Штатна потреба",
+    "total_quantity":"Наявність"
+})
+cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
 st.subheader("Інформація по регіонах")
-st.dataframe(display_table,use_container_width=True)
+st.dataframe(display_table, use_container_width=True)
 if (region_summary["% забезпечення"]<50).any():
     st.warning("⚠ Є регіони з критичним рівнем забезпечення (<50%)")
 
@@ -146,7 +175,7 @@ if (region_summary["% забезпечення"]<50).any():
 # 7. ГРАФІК
 # =====================================================
 st.subheader("Рейтинг регіонів за % забезпечення")
-st.bar_chart(region_summary.sort_values("% забезпечення",ascending=False).set_index("region_name")["% забезпечення"])
+st.bar_chart(region_summary.sort_values("% забезпечення", ascending=False).set_index("region_name")["% забезпечення"])
 
 # =====================================================
 # 8. КАРТА
@@ -155,53 +184,80 @@ with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
 region_name_map = {
-    "Київ":"Kyiv_city","Вінницька область":"Vinnytska","Волинська область":"Volynska",
-    "Дніпропетровська область":"Dnipropetrovska","Донецька область":"Donetska",
-    "Житомирська область":"Zhytomyrska","Закарпатська область":"Zakarpatska",
-    "Запорізька область":"Zaporizka","Івано-Франківська область":"Ivano-Frankivska",
-    "Київська область":"Kyivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
-    "Львівська область":"Lvivska","Миколаївська область":"Mykolaivska","Одеська область":"Odeska",
-    "Полтавська область":"Poltavska","Рівненська область":"Rivnenska","Сумська область":"Sumska",
-    "Тернопільська область":"Ternopilska","Харківська область":"Kharkivska","Херсонська область":"Khersonska",
-    "Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska","Чернівецька область":"Chernivetska",
-    "Чернігівська область":"Chernihivska"
+    "Київ": "Kyiv_city",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Донецька область": "Donetska",
+    "Житомирська область": "Zhytomyrska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Київська область": "Kyivska",
+    "Кіровоградська область": "Kirovohradska",
+    "Луганська область": "Luhanska",
+    "Львівська область": "Lvivska",
+    "Миколаївська область": "Mykolaivska",
+    "Одеська область": "Odeska",
+    "Полтавська область": "Poltavska",
+    "Рівненська область": "Rivnenska",
+    "Сумська область": "Sumska",
+    "Тернопільська область": "Ternopilska",
+    "Харківська область": "Kharkivska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Черкаська область": "Cherkaska",
+    "Чернівецька область": "Chernivetska",
+    "Чернігівська область": "Chernihivska"
 }
 
-for feature in geojson_data["features"]:
-    eng_name = feature["properties"]["name"]
-    ukr_name = next((k for k,v in region_name_map.items() if v==eng_name), None)
-    coverage = float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0] \
-                     if ukr_name and not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0)
-    feature["properties"]["coverage"] = coverage
-    feature["properties"]["tooltip"] = f"{ukr_name}: {coverage}%" if ukr_name else f"{eng_name}: 0%"
+coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+                 for ukr_name, eng_name in region_name_map.items()}
 
 def color_by_coverage(c):
-    if c<50: return "#d73027"
-    elif c<75: return "#f46d43"
-    elif c<100: return "#fee08b"
-    else: return "#1a9850"
+    if c<50: return "#d73027"    # червоний
+    elif c<75: return "#f46d43"   # помаранчевий
+    elif c<100: return "#fee08b"  # жовтий
+    else: return "#1a9850"        # зелений
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+
 folium.GeoJson(
     geojson_data,
     style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
                               "color":"black","weight":1,"fillOpacity":0.75},
-    tooltip=folium.GeoJsonTooltip(fields=["tooltip"],labels=False,localize=True)
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name","coverage"],
+        aliases=["Регіон:","% забезпечення:"],
+        localize=True
+    )
 ).add_to(m)
 
+# Легенда з кольорами та діапазонами
 legend_html = """
-<div style="position: fixed; bottom: 50px; left: 50px; width: 170px; height: 150px;
-background-color: white; border:2px solid grey; z-index:9999; font-size:14px; padding: 10px;">
+<div style="
+position: fixed;
+bottom: 50px;
+left: 50px;
+width: 200px;
+background-color: white;
+border:2px solid grey;
+z-index:9999;
+font-size:14px;
+padding: 10px;
+">
 <b>Легенда % забезпечення</b><br>
-<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
-<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
-<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
-<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
+<i style="background:#d73027;width:15px;height:15px;display:inline-block;margin-right:5px"></i> <50%<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block;margin-right:5px"></i> 50–74%<br>
+<i style="background:#fee08b;width:15px;height:15px;display:inline-block;margin-right:5px"></i> 75–99%<br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block;margin-right:5px"></i> ≥100%
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
+
 st.subheader("Карта рівня забезпечення")
-st_folium(m,width=1000,height=650)
+st_folium(m, width=1000, height=650)
 
 # =====================================================
 # 9. ЕКСПОРТ В EXCEL
