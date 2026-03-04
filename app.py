@@ -173,6 +173,8 @@ display_table = region_summary.rename(columns={
     "total_required":"Штатна потреба",
     "total_quantity":"Наявність"
 })
+
+# Колонка '% забезпечення' в кінці
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
 
@@ -221,13 +223,15 @@ region_name_map = {
     "Чернігівська область": "Chernihivska"
 }
 
-# Присвоєння coverage
-for ukr_name, eng_name in region_name_map.items():
-    value = region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"]
-    coverage = float(value.values[0]) if not value.empty else 0
-    for f in geojson_data["features"]:
-        if f["properties"]["name"]==eng_name:
-            f["properties"]["coverage"]=coverage
+# Додаємо coverage у всі області, щоб не було помилок
+for f in geojson_data["features"]:
+    eng_name = f["properties"]["name"]
+    ukr_name = [k for k,v in region_name_map.items() if v==eng_name]
+    if ukr_name:
+        val = region_summary.loc[region_summary["region_name"]==ukr_name[0], "% забезпечення"]
+        f["properties"]["coverage"] = float(val.values[0]) if not val.empty else 0
+    else:
+        f["properties"]["coverage"] = 0
 
 def color_by_coverage(c):
     if c<50: return "#d73027"
@@ -239,10 +243,8 @@ m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_
 
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {
-        "fillColor": color_by_coverage(f["properties"].get("coverage",0)),
-        "color":"black","weight":1,"fillOpacity":0.75
-    },
+    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
+                              "color":"black","weight":1,"fillOpacity":0.75},
     tooltip=folium.GeoJsonTooltip(
         fields=["name","coverage"],
         aliases=["Регіон:","% забезпечення:"],
@@ -258,8 +260,8 @@ legend_html = """
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 220px;
-height: 130px;
+width: 190px;
+height: 150px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
@@ -267,10 +269,10 @@ font-size:14px;
 padding: 10px;
 ">
 <b>Легенда % забезпечення</b><br>
-[■] червоний: <50%<br>
-[■] помаранчевий: 50–74%<br>
-[■] жовтий: 75–99%<br>
-[■] зелений: ≥100%
+■ <span style='color:#d73027;'>червоний:</span> <50%<br>
+■ <span style='color:#f46d43;'>помаранчевий:</span> 50–74%<br>
+■ <span style='color:#fee08b;'>жовтий:</span> 75–99%<br>
+■ <span style='color:#1a9850;'>зелений:</span> ≥100%
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
