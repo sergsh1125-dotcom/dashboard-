@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import io
-import os
 import json
 import folium
-from folium.features import GeoJsonTooltip
+from streamlit_folium import st_folium
 from openpyxl.styles import PatternFill, Protection
 from openpyxl.worksheet.datavalidation import DataValidation
-from streamlit_folium import st_folium
+from folium.features import GeoJsonTooltip
 
 st.set_page_config(page_title="Dashboard РХБЗ", layout="wide")
 st.title("Дашборд забезпечення засобами РХБ захисту")
@@ -33,7 +32,6 @@ def generate_template():
         "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
         "Чернігівська область"
     ]
-
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         template_df = pd.DataFrame({
@@ -44,7 +42,6 @@ def generate_template():
         })
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
-        # Довідник
         max_len = max(len(allowed_regions), len(allowed_products))
         ref_df = pd.DataFrame({
             "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
@@ -54,22 +51,33 @@ def generate_template():
 
         workbook = writer.book
         data_sheet = workbook["Дані"]
-
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         for cell in data_sheet[1]:
             cell.fill = header_fill
             cell.protection = Protection(locked=True)
 
-        # Data Validation
-        dv_region = DataValidation(type="list", formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}", allow_blank=True)
+        dv_region = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
+            allow_blank=True
+        )
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
-        dv_product = DataValidation(type="list", formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}", allow_blank=True)
+        dv_product = DataValidation(
+            type="list",
+            formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
+            allow_blank=True
+        )
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
-        dv_number = DataValidation(type="decimal", operator="greaterThanOrEqual", formula1="0", allow_blank=True)
+        dv_number = DataValidation(
+            type="decimal",
+            operator="greaterThanOrEqual",
+            formula1="0",
+            allow_blank=True
+        )
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
@@ -77,7 +85,7 @@ def generate_template():
 
     return output.getvalue()
 
-# Кнопка для завантаження шаблону
+# Кнопка завантаження шаблону
 st.sidebar.header("Excel шаблон")
 if st.sidebar.button("📄 Завантажити шаблон Excel"):
     template_bytes = generate_template()
@@ -103,7 +111,6 @@ if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
     st.write("Знайдені колонки:", df.columns.tolist())
     st.stop()
-
 for col in ["quantity","required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -129,7 +136,8 @@ region_summary = (
     .reset_index()
 )
 region_summary["% забезпечення"] = region_summary.apply(
-    lambda row: round((row["total_quantity"]/row["total_required"])*100,1) if row["total_required"]>0 else 0,
+    lambda row: round((row["total_quantity"]/row["total_required"])*100,1)
+    if row["total_required"]>0 else 0,
     axis=1
 )
 region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).clip(lower=0)
@@ -171,87 +179,87 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
-geojson_path = "data/ukraine_regions.geojson"
+with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
+    geojson_data = json.load(f)
 
-if not os.path.exists(geojson_path):
-    st.error(f"❌ Файл GeoJSON не знайдено: {geojson_path}")
-else:
-    with open(geojson_path, "r", encoding="utf-8") as f:
-        geojson_data = json.load(f)
+region_name_map = {
+    "Київ":"Kyiv_city","Вінницька область":"Vinnytska","Волинська область":"Volynska",
+    "Дніпропетровська область":"Dnipropetrovska","Донецька область":"Donetska","Житомирська область":"Zhytomyrska",
+    "Закарпатська область":"Zakarpatska","Запорізька область":"Zaporizka","Івано-Франківська область":"Ivano-Frankivska",
+    "Київська область":"Kyivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
+    "Львівська область":"Lvivska","Миколаївська область":"Mykolaivska","Одеська область":"Odeska",
+    "Полтавська область":"Poltavska","Рівненська область":"Rivnenska","Сумська область":"Sumska",
+    "Тернопільська область":"Ternopilska","Харківська область":"Kharkivska","Херсонська область":"Khersonska",
+    "Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska","Чернівецька область":"Chernivetska",
+    "Чернігівська область":"Chernihivska"
+}
 
-    # Словник покриття
-    region_name_map = {  # українська -> англійська
-        "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
-        "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
-        "Закарпатська область": "Zakarpatska","Запорізька область": "Zaporizka","Івано-Франківська область": "Ivano-Frankivska",
-        "Київська область": "Kyivska","Кіровоградська область": "Kirovohradska","Луганська область": "Luhanska",
-        "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
-        "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
-        "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
-        "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska","Чернівецька область": "Chernivetska",
-        "Чернігівська область": "Chernihivska"
-    }
+coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+                 for ukr_name, eng_name in region_name_map.items()}
 
-    coverage_dict = {
-        eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
-        if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
-        for ukr_name, eng_name in region_name_map.items()
-    }
+def color_by_coverage(c):
+    if c<50: return "#d73027"
+    elif c<75: return "#f46d43"
+    elif c<100: return "#fee08b"
+    else: return "#1a9850"
 
-    def color_by_coverage(c):
-        if c<50: return "#d73027"
-        elif c<75: return "#f46d43"
-        elif c<100: return "#fee08b"
-        else: return "#1a9850"
+m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 
-    m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+# Безпечний style_function
+def style_function(feature):
+    coverage = coverage_dict.get(feature["properties"]["name"],0)
+    if selected_region != "Всі":
+        ukr_name_list = [k for k,v in region_name_map.items() if v==feature["properties"]["name"]]
+        if ukr_name_list and ukr_name_list[0]!=selected_region:
+            return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}
+    return {"fillColor":color_by_coverage(coverage),"color":"black","weight":1,"fillOpacity":0.75}
 
-    def style_function(feature):
-        coverage = coverage_dict.get(feature["properties"]["name"],0)
-        if selected_region!="Всі":
-            ukr_name = [k for k,v in region_name_map.items() if v==feature["properties"]["name"]][0]
-            if ukr_name != selected_region:
-                return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}
-        return {"fillColor":color_by_coverage(coverage),"color":"black","weight":1,"fillOpacity":0.75}
+# Tooltip з % забезпечення
+tooltip = GeoJsonTooltip(
+    fields=["name"],
+    aliases=["Регіон:"],
+    labels=True,
+    sticky=True,
+    localize=True
+)
 
-    tooltip = GeoJsonTooltip(
-        fields=["name"],
-        aliases=["Регіон:"],
-        localize=True,
-        sticky=True
-    )
+folium.GeoJson(
+    geojson_data,
+    style_function=style_function,
+    tooltip=tooltip
+).add_to(m)
 
-    folium.GeoJson(
-        geojson_data,
-        style_function=style_function,
-        tooltip=tooltip
-    ).add_to(m)
+# Підписи регіонів з точним %
+for feature in geojson_data["features"]:
+    eng_name = feature["properties"]["name"]
+    coverage = coverage_dict.get(eng_name,0)
+    coords = feature["properties"].get("center")  # потрібно, щоб у geojson був центр
+    if coords:
+        folium.map.Marker(
+            location=[coords[1],coords[0]],
+            icon=folium.DivIcon(html=f"""<div style="font-size:10pt; font-weight:bold">{coverage}%</div>""")
+        ).add_to(m)
 
-    # Легенда з квадратиками та цифрами
-    legend_html = """
-    <div style="
-    position: fixed;
-    bottom: 50px;
-    left: 50px;
-    width: 160px;
-    height: 120px;
-    background-color: white;
-    border:2px solid grey;
-    z-index:9999;
-    font-size:14px;
-    padding: 10px;
-    ">
-    <b>Легенда % забезпечення</b><br>
-    <i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
-    <i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
-    <i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
-    <i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
-    </div>
-    """
-    m.get_root().html.add_child(folium.Element(legend_html))
+# Легенда з квадратиками і цифрами
+legend_html = """
+<div style="
+position: fixed; bottom: 50px; left: 50px;
+width: 120px; height: 120px;
+background-color: white; border:2px solid grey;
+z-index:9999; font-size:14px; padding: 10px;
+">
+<b>Легенда % забезпечення</b><br>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
+<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
+</div>
+"""
+m.get_root().html.add_child(folium.Element(legend_html))
 
-    st.subheader("Карта стану забезпечення засобами РХБ захисту")
-    st_folium(m, width=1000, height=650)
+st.subheader("Карта стану забезпечення засобами РХБ захисту")
+st_folium(m, width=1000, height=650)
 
 # =====================================================
 # 9. ЕКСПОРТ В EXCEL
