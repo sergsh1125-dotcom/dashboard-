@@ -135,39 +135,56 @@ st.subheader("Рейтинг регіонів за % забезпечення")
 st.bar_chart(region_summary.sort_values("% забезпечення", ascending=False).set_index("region_name")["% забезпечення"])
 
 # =====================================================
-# 8. КАРТА (ПРАВИЛЬНА ВЕРСІЯ)
+# 8. КАРТА — ВЕРСІЯ ДЛЯ SIMPLEMAPS GEOJSON
 # =====================================================
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
-st.write(geojson_data["features"][0]["properties"])
-st.stop()
-region_name_map = {
-    "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska","Запорізька область": "Zaporizka","Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska","Кіровоградська область": "Kirovohradska","Луганська область": "Luhanska",
-    "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
-    "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska",
-    "Чернівецька область": "Chernivetska","Чернігівська область": "Chernihivska"
+
+# відповідність української назви до ID GeoJSON
+region_id_map = {
+    "Вінницька область": "UA05",
+    "Волинська область": "UA07",
+    "Дніпропетровська область": "UA12",
+    "Донецька область": "UA14",
+    "Житомирська область": "UA18",
+    "Закарпатська область": "UA21",
+    "Запорізька область": "UA23",
+    "Івано-Франківська область": "UA26",
+    "Київська область": "UA32",
+    "Кіровоградська область": "UA35",
+    "Луганська область": "UA09",
+    "Львівська область": "UA46",
+    "Миколаївська область": "UA48",
+    "Одеська область": "UA51",
+    "Полтавська область": "UA53",
+    "Рівненська область": "UA56",
+    "Сумська область": "UA59",
+    "Тернопільська область": "UA61",
+    "Харківська область": "UA63",
+    "Херсонська область": "UA65",
+    "Хмельницька область": "UA68",
+    "Черкаська область": "UA71",
+    "Чернівецька область": "UA73",
+    "Чернігівська область": "UA74",
+    "Київ": "UA30",
+    "Автономна Республіка Крим": "UA43"
 }
 
-# Формуємо словник % забезпечення
+# формуємо coverage_dict по ID
 coverage_dict = {}
-for ukr_name, eng_name in region_name_map.items():
-    row = region_summary[region_summary["region_name"] == ukr_name]
+
+for region_name, region_id in region_id_map.items():
+    row = region_summary[region_summary["region_name"] == region_name]
     if not row.empty:
-        coverage_dict[eng_name] = float(row["% забезпечення"].values[0])
+        coverage_dict[region_id] = float(row["% забезпечення"].values[0])
     else:
-        coverage_dict[eng_name] = 0
+        coverage_dict[region_id] = 0
 
-# 🔴 ОСНОВНЕ ВИПРАВЛЕННЯ — записуємо coverage у GeoJSON
+# записуємо coverage у GeoJSON
 for feature in geojson_data["features"]:
-    region_id = feature["properties"]["id"]
-    feature["properties"]["coverage"] = coverage_dict.get(region_id, 0)
+    feature_id = feature["properties"]["id"]
+    feature["properties"]["coverage"] = coverage_dict.get(feature_id, 0)
 
-# Функція кольору
 def color_by_coverage(c):
     if c < 50:
         return "#d73027"
@@ -195,7 +212,6 @@ folium.GeoJson(
     )
 ).add_to(m)
 
-# Легенда
 legend_html = """
 <div style="
 position: fixed;
