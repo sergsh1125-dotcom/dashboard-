@@ -215,26 +215,43 @@ folium.GeoJson(
 legend_html = """
 <div style="
 position: fixed;
-bottom: 50px;
-left: 50px;
-width: 190px;
-background-color: white;
-border:2px solid grey;
-z-index:9999;
-font-size:14px;
-padding: 10px;
+bottom: 40px;
+left: 40px;
+width: 200px;
+background-color: rgba(255,255,255,0.95);
+border: 2px solid #444;
+border-radius: 8px;
+z-index: 999999 !important;
+font-size: 14px;
+padding: 12px;
+box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
 ">
-<b>Легенда</b><br>
-<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> &lt;50%<br>
-<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
-<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
-<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
+<b>Легенда</b><br><br>
+
+<div>
+<span style="display:inline-block;width:15px;height:15px;background:#d73027;margin-right:8px;"></span>
+&lt; 50%
+</div>
+
+<div>
+<span style="display:inline-block;width:15px;height:15px;background:#f46d43;margin-right:8px;"></span>
+50–74%
+</div>
+
+<div>
+<span style="display:inline-block;width:15px;height:15px;background:#fee08b;margin-right:8px;"></span>
+75–99%
+</div>
+
+<div>
+<span style="display:inline-block;width:15px;height:15px;background:#1a9850;margin-right:8px;"></span>
+≥ 100%
+</div>
+
 </div>
 """
-m.get_root().html.add_child(folium.Element(legend_html))
 
-st.subheader("Карта рівня забезпечення")
-st_folium(m, width=1000, height=650)
+m.get_root().html.add_child(folium.Element(legend_html))
 # =====================================================
 # 9. ЕКСПОРТ В EXCEL
 # =====================================================
