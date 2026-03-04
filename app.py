@@ -1,270 +1,145 @@
 import streamlit as st
 import pandas as pd
-import io
-import json
 import folium
+import json
 from streamlit_folium import st_folium
-import random
-from openpyxl.styles import PatternFill, Protection
-from openpyxl.worksheet.datavalidation import DataValidation
+from branca.element import MacroElement
+from jinja2 import Template
 
-st.set_page_config(page_title="Dashboard РХБЗ", layout="wide")
-st.title("Дашборд забезпечення засобами РХБ захисту")
+st.set_page_config(layout="wide")
 
-# =====================================================
-# 1. СТВОРЕННЯ ПРИКЛАДНОГО ШАБЛОНУ
-# =====================================================
-regions = [
-    "Київ","Вінницька область","Волинська область","Дніпропетровська область",
-    "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
-    "Івано-Франківська область","Київська область","Кіровоградська область","Луганська область",
-    "Львівська область","Миколаївська область","Одеська область","Полтавська область",
-    "Рівненська область","Сумська область","Тернопільська область","Харківська область",
-    "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
-    "Чернігівська область"
-]
+st.title("Дашборд забезпеченості по регіонах")
 
-products = [
-    "спеціальна техніка",
-    "прилади РР",
-    "прилади ХР",
-    "протигази",
-    "респіратори",
-    "захисний одяг"
-]
+# =========================
+# ЗАВАНТАЖЕННЯ ДАНИХ
+# =========================
 
-def generate_example_excel():
-    data = []
-    for region in regions:
-        for product in products:
-            required = random.randint(50,200)
-            quantity = random.randint(0, required)
-            data.append([region, product, quantity, required])
-    df = pd.DataFrame(data, columns=["region_name","product_name","quantity","required_quantity"])
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Дані", index=False)
-    return output.getvalue()
+uploaded_file = st.file_uploader("Завантаж Excel файл", type=["xlsx"])
 
-st.sidebar.header("Excel шаблон")
-if st.sidebar.button("📄 Завантажити приклад шаблону"):
-    excel_bytes = generate_example_excel()
-    st.sidebar.download_button(
-        label="📥 Завантажити приклад Excel",
-        data=excel_bytes,
-        file_name="example_filled_template.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+
+    required_columns = [
+        "region",
+        "category",
+        "product_name",
+        "available_quantity",
+        "required_quantity"
+    ]
+
+    for col in required_columns:
+        if col not in df.columns:
+            st.error(f"У файлі відсутня колонка: {col}")
+            st.stop()
+
+    # =========================
+    # РОЗРАХУНОК %
+    # =========================
+
+    grouped = df.groupby("region").agg({
+        "available_quantity": "sum",
+        "required_quantity": "sum"
+    }).reset_index()
+
+    grouped["coverage"] = (
+        grouped["available_quantity"] /
+        grouped["required_quantity"].replace(0, 1)
+    ) * 100
+
+    # =========================
+    # ЗАВАНТАЖЕННЯ GEOJSON
+    # =========================
+
+    with open("ukraine_regions.geojson", "r", encoding="utf-8") as f:
+        geojson_data = json.load(f)
+
+    # додаємо coverage в geojson
+    for feature in geojson_data["features"]:
+        region_name = feature["properties"]["name"]
+        match = grouped[grouped["region"] == region_name]
+
+        if not match.empty:
+            feature["properties"]["coverage"] = round(match.iloc[0]["coverage"], 1)
+        else:
+            feature["properties"]["coverage"] = 0
+
+    # =========================
+    # ФУНКЦІЯ КОЛЬОРУ
+    # =========================
+
+    def color_by_coverage(value):
+        if value < 50:
+            return "#d73027"
+        elif value < 75:
+            return "#f46d43"
+        elif value < 100:
+            return "#fee08b"
+        else:
+            return "#1a9850"
+
+    # =========================
+    # СТВОРЕННЯ КАРТИ
+    # =========================
+
+    m = folium.Map(
+        location=[48.5, 31],
+        zoom_start=6,
+        tiles="cartodbpositron"
     )
 
-# =====================================================
-# 2. ЗАВАНТАЖЕННЯ EXCEL
-# =====================================================
-uploaded_file = st.sidebar.file_uploader("Завантаж Excel файл", type=["xlsx"])
-if uploaded_file is None:
-    st.info("⬅ Завантажте Excel файл для початку роботи.")
-    st.stop()
+    folium.GeoJson(
+        geojson_data,
+        style_function=lambda f: {
+            "fillColor": color_by_coverage(f["properties"].get("coverage", 0)),
+            "color": "black",
+            "weight": 1,
+            "fillOpacity": 0.7
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=["name", "coverage"],
+            aliases=["Регіон:", "Забезпеченість (%):"],
+            localize=True
+        )
+    ).add_to(m)
 
-df = pd.read_excel(uploaded_file)
-df.columns = df.columns.str.strip().str.lower()
-required_columns = ["region_name","product_name","quantity","required_quantity"]
-if not all(col in df.columns for col in required_columns):
-    st.error("У файлі відсутні необхідні колонки.")
-    st.write("Знайдені колонки:", df.columns.tolist())
-    st.stop()
-for col in ["quantity","required_quantity"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    # =========================
+    # ЛЕГЕНДА (СТАБІЛЬНА)
+    # =========================
 
-# =====================================================
-# 3. ФІЛЬТРИ
-# =====================================================
-st.sidebar.header("Фільтри")
-selected_region = st.sidebar.selectbox("Регіон", ["Всі"] + sorted(df["region_name"].unique()))
-selected_product = st.sidebar.selectbox("Засіб РХБЗ", ["Всі"] + sorted(df["product_name"].unique()))
-filtered_df = df.copy()
-if selected_region != "Всі":
-    filtered_df = filtered_df[filtered_df["region_name"]==selected_region]
-if selected_product != "Всі":
-    filtered_df = filtered_df[filtered_df["product_name"]==selected_product]
+    legend = MacroElement()
+    legend._template = Template("""
+    {% macro html(this, kwargs) %}
+    <div style="
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
+    width: 200px;
+    background: white;
+    border: 2px solid grey;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    z-index: 9999;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+    ">
+    <b>Легенда</b><br><br>
 
-# =====================================================
-# 4. АГРЕГАЦІЯ
-# =====================================================
-region_summary = (
-    filtered_df.groupby("region_name")
-    .agg(total_quantity=("quantity","sum"), total_required=("required_quantity","sum"))
-    .reset_index()
-)
-region_summary["% забезпечення"] = region_summary.apply(
-    lambda row: round((row["total_quantity"]/row["total_required"])*100,1)
-    if row["total_required"]>0 else 0,
-    axis=1
-)
-region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).clip(lower=0)
-region_summary["Надлишок"] = (region_summary["total_quantity"] - region_summary["total_required"]).clip(lower=0)
+    <div><span style="background:#d73027;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> < 50%</div>
+    <div><span style="background:#f46d43;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> 50–74%</div>
+    <div><span style="background:#fee08b;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> 75–99%</div>
+    <div><span style="background:#1a9850;width:15px;height:15px;display:inline-block;margin-right:8px;"></span> ≥ 100%</div>
 
-# =====================================================
-# 5. KPI
-# =====================================================
-total_quantity = int(region_summary["total_quantity"].sum())
-total_required = int(region_summary["total_required"].sum())
-col1,col2,col3 = st.columns(3)
-col1.metric("Наявність", total_quantity)
-col2.metric("Штатна потреба", total_required)
-overall_percent = round((total_quantity/total_required)*100,1) if total_required>0 else 0
-col3.metric("Загальний % забезпечення", f"{overall_percent}%")
+    </div>
+    {% endmacro %}
+    """)
 
-# =====================================================
-# 6. ТАБЛИЦЯ
-# =====================================================
-display_table = region_summary.rename(columns={
-    "region_name":"Регіон",
-    "total_required":"Штатна потреба",
-    "total_quantity":"Наявність"
-})
-cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
-display_table = display_table[cols]
-st.subheader("Інформація по регіонах")
-st.dataframe(display_table, use_container_width=True)
-if (region_summary["% забезпечення"]<50).any():
-    st.warning("⚠ Є регіони з критичним рівнем забезпечення (<50%)")
+    m.add_child(legend)
 
-# =====================================================
-# 7. ГРАФІК
-# =====================================================
-st.subheader("Рейтинг регіонів за % забезпечення")
-st.bar_chart(region_summary.sort_values("% забезпечення", ascending=False).set_index("region_name")["% забезпечення"])
+    # =========================
+    # ВІДОБРАЖЕННЯ
+    # =========================
 
-# =====================================================
-# 8. КАРТА — ВЕРСІЯ ДЛЯ SIMPLEMAPS GEOJSON
-# =====================================================
-with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
-    geojson_data = json.load(f)
+    st_folium(m, width=1200, height=650)
 
-# відповідність української назви до ID GeoJSON
-region_id_map = {
-    "Вінницька область": "UA05",
-    "Волинська область": "UA07",
-    "Дніпропетровська область": "UA12",
-    "Донецька область": "UA14",
-    "Житомирська область": "UA18",
-    "Закарпатська область": "UA21",
-    "Запорізька область": "UA23",
-    "Івано-Франківська область": "UA26",
-    "Київська область": "UA32",
-    "Кіровоградська область": "UA35",
-    "Луганська область": "UA09",
-    "Львівська область": "UA46",
-    "Миколаївська область": "UA48",
-    "Одеська область": "UA51",
-    "Полтавська область": "UA53",
-    "Рівненська область": "UA56",
-    "Сумська область": "UA59",
-    "Тернопільська область": "UA61",
-    "Харківська область": "UA63",
-    "Херсонська область": "UA65",
-    "Хмельницька область": "UA68",
-    "Черкаська область": "UA71",
-    "Чернівецька область": "UA73",
-    "Чернігівська область": "UA74",
-    "Київ": "UA30",
-    "Автономна Республіка Крим": "UA43"
-}
-
-# формуємо coverage_dict по ID
-coverage_dict = {}
-
-for region_name, region_id in region_id_map.items():
-    row = region_summary[region_summary["region_name"] == region_name]
-    if not row.empty:
-        coverage_dict[region_id] = float(row["% забезпечення"].values[0])
-    else:
-        coverage_dict[region_id] = 0
-
-# записуємо coverage у GeoJSON
-for feature in geojson_data["features"]:
-    feature_id = feature["properties"]["id"]
-    feature["properties"]["coverage"] = coverage_dict.get(feature_id, 0)
-
-def color_by_coverage(c):
-    if c < 50:
-        return "#d73027"
-    elif c < 75:
-        return "#f46d43"
-    elif c < 100:
-        return "#fee08b"
-    else:
-        return "#1a9850"
-
-m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron")
-
-folium.GeoJson(
-    geojson_data,
-    style_function=lambda f: {
-        "fillColor": color_by_coverage(f["properties"]["coverage"]),
-        "color": "black",
-        "weight": 1,
-        "fillOpacity": 0.8
-    },
-    tooltip=folium.GeoJsonTooltip(
-        fields=["name","coverage"],
-        aliases=["Регіон:","% забезпечення:"],
-        localize=True
-    )
-).add_to(m)
-
-legend_html = """
-<div style="
-position: fixed;
-bottom: 40px;
-left: 40px;
-width: 200px;
-background-color: rgba(255,255,255,0.95);
-border: 2px solid #444;
-border-radius: 8px;
-z-index: 999999 !important;
-font-size: 14px;
-padding: 12px;
-box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
-">
-<b>Легенда</b><br><br>
-
-<div>
-<span style="display:inline-block;width:15px;height:15px;background:#d73027;margin-right:8px;"></span>
-&lt; 50%
-</div>
-
-<div>
-<span style="display:inline-block;width:15px;height:15px;background:#f46d43;margin-right:8px;"></span>
-50–74%
-</div>
-
-<div>
-<span style="display:inline-block;width:15px;height:15px;background:#fee08b;margin-right:8px;"></span>
-75–99%
-</div>
-
-<div>
-<span style="display:inline-block;width:15px;height:15px;background:#1a9850;margin-right:8px;"></span>
-≥ 100%
-</div>
-
-</div>
-"""
-
-m.get_root().html.add_child(folium.Element(legend_html))
-# =====================================================
-# 9. ЕКСПОРТ В EXCEL
-# =====================================================
-def convert_to_excel(df):
-    out = io.BytesIO()
-    with pd.ExcelWriter(out, engine="openpyxl") as writer:
-        cols = [c for c in df.columns if c != "% забезпечення"] + ["% забезпечення"]
-        df[cols].to_excel(writer, sheet_name="Звіт", index=False)
-    return out.getvalue()
-
-st.download_button(
-    label="📥 Завантажити звіт в Excel",
-    data=convert_to_excel(display_table),
-    file_name="zvit_po_regionakh.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+else:
+    st.info("Завантаж Excel файл для відображення карти.")
