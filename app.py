@@ -172,7 +172,11 @@ display_table = region_summary.rename(columns={
     "region_name":"Регіон",
     "total_required":"Штатна потреба",
     "total_quantity":"Наявність"
-})[["Регіон","Штатна потреба","Наявність","Нестача","Надлишок","% забезпечення"]]
+})
+
+# Колонка '% забезпечення' в кінці
+cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
+display_table = display_table[cols]
 
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
@@ -224,19 +228,48 @@ coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"
                  for ukr_name, eng_name in region_name_map.items()}
 
 def color_by_coverage(c):
-    return "#ffffff" if c==0 else "#d73027" if c<50 else "#f46d43" if c<75 else "#fee08b" if c<100 else "#1a9850"
-
-for feature in geojson_data["features"]:
-    feature["properties"]["coverage"] = coverage_dict.get(feature["properties"]["name"],0)
+    if c<50:
+        return "#d73027"    # червоний
+    elif c<75:
+        return "#f46d43"    # помаранчевий
+    elif c<100:
+        return "#fee08b"    # жовтий
+    else:
+        return "#1a9850"    # зелений
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
+
 folium.GeoJson(
     geojson_data,
     style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
                               "color":"black","weight":1,"fillOpacity":0.75}
 ).add_to(m)
+
+# Легенда
+legend_html = """
+<div style="
+position: fixed;
+bottom: 50px;
+left: 50px;
+width: 170px;
+height: 150px;
+background-color: white;
+border:2px solid grey;
+z-index:9999;
+font-size:14px;
+padding: 10px;
+">
+<b>Легенда % забезпечення</b><br>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
+<i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
+<i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%
+</div>
+"""
+m.get_root().html.add_child(folium.Element(legend_html))
+
 st.subheader("Карта рівня забезпечення")
-st_folium(m,width=1000,height=650)
+st_folium(m, width=1000, height=650)
 
 # =====================================================
 # 9. ЕКСПОРТ В EXCEL
@@ -244,7 +277,8 @@ st_folium(m,width=1000,height=650)
 def convert_to_excel(df):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Звіт", index=False)
+        cols = [c for c in df.columns if c != "% забезпечення"] + ["% забезпечення"]
+        df[cols].to_excel(writer, sheet_name="Звіт", index=False)
     return out.getvalue()
 
 st.download_button(
