@@ -167,6 +167,7 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
+# ===================== КАРТА =====================
 import folium
 from folium.features import GeoJsonTooltip
 
@@ -188,62 +189,57 @@ def color_by_coverage(c):
     else:
         return "#d73027"  # червоний
 
-# Стиль для кожного регіону
+# Стиль для регіону
 def style_function(feature):
     feature_name = feature["properties"]["name"]
-    val = coverage_dict.get(feature_name, 0)
+    # Знаходимо українську назву
+    ukr_name_list = [k for k,v in region_name_map.items() if v==feature_name]
+    ukr_name = ukr_name_list[0] if ukr_name_list else None
+    val = coverage_dict.get(ukr_name, 0)  # безпечний доступ
 
-    # Якщо обрано 1 регіон, інші затемнені
-    if selected_region != "Всі":
-        ukr_name_list = [k for k,v in region_name_map.items() if v==feature_name]
-        ukr_name = ukr_name_list[0] if ukr_name_list else None
-        if ukr_name != selected_region:
-            return {"fillColor":"#a0cbe8","color":"black","weight":1,"fillOpacity":0.5}
+    # Якщо обрано один регіон, інші затемнені
+    if selected_region != "Всі" and ukr_name != selected_region:
+        return {"fillColor":"#a0cbe8","color":"black","weight":1,"fillOpacity":0.5}
 
     return {"fillColor": color_by_coverage(val), "color":"black", "weight":1, "fillOpacity":0.75}
 
 # Підказка при наведенні
-tooltip = GeoJsonTooltip(
-    fields=["name"],
-    aliases=["Регіон:"],
-    localize=True,
-    labels=True,
-    sticky=True,
-    toLocaleString=True
-)
+def tooltip_function(feature):
+    feature_name = feature["properties"]["name"]
+    ukr_name_list = [k for k,v in region_name_map.items() if v==feature_name]
+    ukr_name = ukr_name_list[0] if ukr_name_list else "Невідомо"
+    val = coverage_dict.get(ukr_name, 0)
+    return f"{ukr_name}\n% забезпечення: {val}%"
 
 geojson = folium.GeoJson(
     geojson_data,
     style_function=style_function,
-    tooltip=GeoJsonTooltip(
+    tooltip=folium.GeoJsonTooltip(
         fields=["name"],
-        aliases=["Регіон:"],
-        labels=True,
+        aliases=[""],
+        labels=False,
         sticky=True,
         localize=True,
-        # додаємо % забезпечення
-        fmt=lambda f: f"{f['name']}\n% забезпечення: {coverage_dict.get(f['name'],0)}%"
+        fmt=lambda f: tooltip_function(f)
     )
 ).add_to(m)
 
-# Постійні підписи назв регіонів
+# Постійні підписи регіонів
 for feature in geojson_data["features"]:
-    coords = feature["properties"]["center"] if "center" in feature["properties"] else None
+    coords = feature["properties"].get("center", None)
     if coords:
-        val = coverage_dict.get(feature["properties"]["name"], 0)
         folium.map.Marker(
             location=[coords[1], coords[0]],
             icon=folium.DivIcon(html=f"""<div style="font-size:10pt;font-weight:bold">{feature["properties"]["name"]}</div>""")
         ).add_to(m)
 
-# Легенда з кольоровими квадратами і діапазонами %
+# Легенда з квадратиками і числами
 legend_html = """
 <div style="
 position: fixed; 
 bottom: 50px; left: 50px; width: 150px; height: 130px; 
 background-color: white; border:2px solid grey; z-index:9999; font-size:12px;
 padding: 10px;">
-<b>% забезпечення</b><br>
 <i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%<br>
 <i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
 <i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
