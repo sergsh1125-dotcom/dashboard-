@@ -22,7 +22,6 @@ def generate_template():
         "респіратори",
         "захисний одяг"
     ]
-
     allowed_regions = [
         "Київ","Вінницька область","Волинська область","Дніпропетровська область",
         "Донецька область","Житомирська область","Закарпатська область","Запорізька область",
@@ -32,7 +31,6 @@ def generate_template():
         "Херсонська область","Хмельницька область","Черкаська область","Чернівецька область",
         "Чернігівська область"
     ]
-
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         template_df = pd.DataFrame({
@@ -43,7 +41,6 @@ def generate_template():
         })
         template_df.to_excel(writer, sheet_name="Дані", index=False)
 
-        # Лист довідника
         max_len = max(len(allowed_regions), len(allowed_products))
         ref_df = pd.DataFrame({
             "Регіони": allowed_regions + [""]*(max_len - len(allowed_regions)),
@@ -53,14 +50,11 @@ def generate_template():
 
         workbook = writer.book
         data_sheet = workbook["Дані"]
-
-        # Підсвітка заголовків
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         for cell in data_sheet[1]:
             cell.fill = header_fill
             cell.protection = Protection(locked=True)
 
-        # Data Validation для регіонів
         dv_region = DataValidation(
             type="list",
             formula1=f"=Довідник!$A$2:$A${len(allowed_regions)+1}",
@@ -69,7 +63,6 @@ def generate_template():
         dv_region.add("A2:A500")
         data_sheet.add_data_validation(dv_region)
 
-        # Data Validation для продуктів
         dv_product = DataValidation(
             type="list",
             formula1=f"=Довідник!$B$2:$B${len(allowed_products)+1}",
@@ -78,7 +71,6 @@ def generate_template():
         dv_product.add("B2:B500")
         data_sheet.add_data_validation(dv_product)
 
-        # Data Validation для чисел >=0
         dv_number = DataValidation(
             type="decimal",
             operator="greaterThanOrEqual",
@@ -88,12 +80,10 @@ def generate_template():
         dv_number.add("C2:D500")
         data_sheet.add_data_validation(dv_number)
 
-        # Захист листа
         data_sheet.protection.sheet = True
 
     return output.getvalue()
 
-# Кнопка для завантаження шаблону
 st.sidebar.header("Excel шаблон")
 if st.sidebar.button("📄 Завантажити шаблон Excel"):
     template_bytes = generate_template()
@@ -114,7 +104,6 @@ if uploaded_file is None:
 
 df = pd.read_excel(uploaded_file)
 df.columns = df.columns.str.strip().str.lower()
-
 required_columns = ["region_name","product_name","quantity","required_quantity"]
 if not all(col in df.columns for col in required_columns):
     st.error("У файлі відсутні необхідні колонки.")
@@ -130,7 +119,6 @@ for col in ["quantity","required_quantity"]:
 st.sidebar.header("Фільтри")
 selected_region = st.sidebar.selectbox("Регіон", ["Всі"] + sorted(df["region_name"].unique()))
 selected_product = st.sidebar.selectbox("Засіб РХБЗ", ["Всі"] + sorted(df["product_name"].unique()))
-
 filtered_df = df.copy()
 if selected_region != "Всі":
     filtered_df = filtered_df[filtered_df["region_name"]==selected_region]
@@ -174,7 +162,6 @@ display_table = region_summary.rename(columns={
 })
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
-
 st.subheader("Інформація по регіонах")
 st.dataframe(display_table, use_container_width=True)
 if (region_summary["% забезпечення"]<50).any():
@@ -220,61 +207,53 @@ region_name_map = {
     "Чернігівська область": "Chernihivska"
 }
 
-coverage_dict = {}
-for ukr_name, eng_name in region_name_map.items():
-    val = region_summary.loc[region_summary["region_name"]==ukr_name, "% забезпечення"]
-    coverage_dict[eng_name] = float(val.values[0]) if not val.empty else 0
-
-for feature in geojson_data["features"]:
-    eng_name = feature["properties"]["name"]
-    feature["properties"]["coverage"] = coverage_dict.get(eng_name, 0)
+coverage_dict = {eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+                 if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+                 for ukr_name, eng_name in region_name_map.items()}
 
 def color_by_coverage(c):
-    if c<50: return "#d73027"
-    elif c<75: return "#f46d43"
-    elif c<100: return "#fee08b"
-    else: return "#1a9850"
+    if c<50:
+        return "#d73027"
+    elif c<75:
+        return "#f46d43"
+    elif c<100:
+        return "#fee08b"
+    else:
+        return "#1a9850"
 
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
-
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {
-        "fillColor": color_by_coverage(f["properties"]["coverage"]),
-        "color":"black",
-        "weight":1,
-        "fillOpacity":0.75
-    },
-    tooltip=folium.GeoJsonTooltip(
-        fields=["name","coverage"],
-        aliases=["Регіон:","% забезпечення:"],
-        localize=True
-    )
+    style_function=lambda f: {"fillColor": color_by_coverage(f["properties"]["coverage"]),
+                              "color":"black","weight":1,"fillOpacity":0.75}
 ).add_to(m)
 
-# Легенда з видимими цифрами
+# =====================================================
+# Легенда з видимими кольорами і діапазонами
+# =====================================================
 legend_html = """
 <div style="
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 220px;
+width: 230px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
 font-size:14px;
 padding: 10px;
 ">
-<b>Легенда % забезпечення</b><br>
-<table style='border-collapse: collapse;'>
-<tr><td style='width:20px;background:#d73027'>&nbsp;</td><td>червоний: <50%</td></tr>
-<tr><td style='width:20px;background:#f46d43'>&nbsp;</td><td>помаранчевий: 50–74%</td></tr>
-<tr><td style='width:20px;background:#fee08b'>&nbsp;</td><td>жовтий: 75–99%</td></tr>
-<tr><td style='width:20px;background:#1a9850'>&nbsp;</td><td>зелений: ≥100%</td></tr>
+<b>Легенда % забезпечення</b>
+<table style='border-collapse: collapse; margin-top:5px;'>
+<tr><td style='width:20px;height:20px;background:#d73027;border:1px solid #000'>&nbsp;</td><td style='padding-left:5px'>червоний: <50%</td></tr>
+<tr><td style='width:20px;height:20px;background:#f46d43;border:1px solid #000'>&nbsp;</td><td style='padding-left:5px'>помаранчевий: 50–74%</td></tr>
+<tr><td style='width:20px;height:20px;background:#fee08b;border:1px solid #000'>&nbsp;</td><td style='padding-left:5px'>жовтий: 75–99%</td></tr>
+<tr><td style='width:20px;height:20px;background:#1a9850;border:1px solid #000'>&nbsp;</td><td style='padding-left:5px'>зелений: ≥100%</td></tr>
 </table>
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
+
 st.subheader("Карта рівня забезпечення")
 st_folium(m, width=1000, height=650)
 
