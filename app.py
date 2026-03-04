@@ -134,6 +134,7 @@ region_summary["% забезпечення"] = region_summary.apply(
 )
 region_summary["Нестача"] = (region_summary["total_required"] - region_summary["total_quantity"]).clip(lower=0)
 region_summary["Надлишок"] = (region_summary["total_quantity"] - region_summary["total_required"]).clip(lower=0)
+region_summary["region_name_clean"] = region_summary["region_name"].str.strip().str.lower()
 
 # =====================================================
 # 5. KPI
@@ -152,7 +153,6 @@ col3.metric("Загальний % забезпечення", f"{overall_percent}
 display_table = region_summary.rename(columns={
     "region_name":"Регіон","total_required":"Штатна потреба","total_quantity":"Наявність"
 })
-# Колонка '% забезпечення' в кінці
 cols = [c for c in display_table.columns if c != "% забезпечення"] + ["% забезпечення"]
 display_table = display_table[cols]
 
@@ -175,9 +175,9 @@ with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
 
 # Присвоюємо coverage для всіх областей
 for feature in geojson_data["features"]:
-    props = feature.get("properties",{})
-    ukr_name = props.get("name","").strip()
-    match = region_summary[region_summary["region_name"].str.strip()==ukr_name]
+    props = feature.get("properties", {})
+    geo_name = props.get("name","").strip().lower()
+    match = region_summary[region_summary["region_name_clean"] == geo_name]
     props["coverage"] = float(match["% забезпечення"].values[0]) if not match.empty else 0
 
 def color_by_coverage(c):
@@ -200,14 +200,14 @@ folium.GeoJson(
     )
 ).add_to(m)
 
-# Легенда
+# Легенда з цифрами
 legend_html = """
 <div style="
 position: fixed;
 bottom: 50px;
 left: 50px;
-width: 170px;
-height: 150px;
+width: 180px;
+height: 160px;
 background-color: white;
 border:2px solid grey;
 z-index:9999;
