@@ -168,64 +168,151 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # 8. КАРТА
 # =====================================================
 import folium
-from shapely.geometry import shape
-from folium.features import GeoJsonTooltip
+from streamlit_folium import st_folium
+import json
+
+# Завантажуємо GeoJSON
+with open("data/ukraine_regions.geojson", "r", encoding="utf-8") as f:
+    geojson_data = json.load(f)
+
+# Словник для мапінгу українських назв на англійські (як у GeoJSON)
+region_name_map = {
+    "Київ": "Kyiv_city",
+    "Вінницька область": "Vinnytska",
+    "Волинська область": "Volynska",
+    "Дніпропетровська область": "Dnipropetrovska",
+    "Донецька область": "Donetska",
+    "Житомирська область": "Zhytomyrska",
+    "Закарпатська область": "Zakarpatska",
+    "Запорізька область": "Zaporizka",
+    "Івано-Франківська область": "Ivano-Frankivska",
+    "Київська область": "Kyivska",
+    "Кіровоградська область": "Kirovohradska",
+    "Луганська область": "Luhanska",
+    "Львівська область": "Lvivska",
+    "Миколаївська область": "Mykolaivska",
+    "Одеська область": "Odeska",
+    "Полтавська область": "Poltavska",
+    "Рівненська область": "Rivnenska",
+    "Сумська область": "Sumska",
+    "Тернопільська область": "Ternopilska",
+    "Харківська область": "Kharkivska",
+    "Херсонська область": "Khersonska",
+    "Хмельницька область": "Khmelnytska",
+    "Черкаська область": "Cherkaska",
+    "Чернівецька область": "Chernivetska",
+    "Чернігівська область": "Chernihivska"
+}
+
+# Словник центру регіонів для підписів (latitude, longitude)
+region_centers = {
+    "Київ": [50.45, 30.52],
+    "Вінницька область": [49.23, 28.47],
+    "Волинська область": [50.75, 25.33],
+    "Дніпропетровська область": [48.45, 35.05],
+    "Донецька область": [48.0, 37.8],
+    "Житомирська область": [50.27, 28.67],
+    "Закарпатська область": [48.62, 22.29],
+    "Запорізька область": [47.85, 35.14],
+    "Івано-Франківська область": [48.92, 24.71],
+    "Київська область": [50.5, 30.5],
+    "Кіровоградська область": [48.52, 32.26],
+    "Луганська область": [48.57, 39.31],
+    "Львівська область": [49.84, 24.03],
+    "Миколаївська область": [47.0, 31.97],
+    "Одеська область": [46.48, 30.73],
+    "Полтавська область": [49.58, 34.55],
+    "Рівненська область": [50.62, 26.25],
+    "Сумська область": [50.91, 34.8],
+    "Тернопільська область": [49.56, 25.6],
+    "Харківська область": [50.0, 36.23],
+    "Херсонська область": [46.63, 32.61],
+    "Хмельницька область": [49.42, 26.99],
+    "Черкаська область": [49.45, 32.06],
+    "Чернівецька область": [48.28, 25.93],
+    "Чернігівська область": [51.51, 31.28]
+}
+
+# Формуємо словник % забезпечення
+coverage_dict = {
+    eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
+    if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
+    for ukr_name, eng_name in region_name_map.items()
+}
+
+# Функція для кольорів
+def color_by_coverage(c):
+    if c >= 100:
+        return "#1a9850"  # зелений
+    elif c >= 75:
+        return "#fee08b"  # жовтий
+    elif c >= 51:
+        return "#f46d43"  # помаранчевий
+    else:
+        return "#d73027"  # червоний
+
+# Якщо обрано один регіон, всі інші - затемнені
+def style_function(feature):
+    ukr_name = [k for k,v in region_name_map.items() if v==feature["properties"]["name"]][0]
+    val = coverage_dict.get(feature["properties"]["name"],0)
+    if selected_region != "Всі" and ukr_name != selected_region:
+        return {"fillColor":"#a0cbe8","color":"black","weight":1,"fillOpacity":0.5}  # затемнені
+    return {"fillColor":color_by_coverage(val),"color":"black","weight":1,"fillOpacity":0.75}
+
+# Підказка при наведенні
+tooltip = folium.GeoJsonTooltip(
+    fields=["name"],
+    aliases=["Регіон:"],
+    localize=True,
+    sticky=True,
+    labels=True,
+    style=("background-color: white; color: black; font-weight: bold;")
+)
 
 # Створюємо карту
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 
-# Обчислення кольору для кожного регіону
-def color_by_coverage(name):
-    coverage = coverage_dict.get(name, 0)
-    if selected_region != "Всі" and name != selected_region:
-        return "#c6dbef"  # затемнені регіони, якщо обраний один
-    if coverage >= 100:
-        return "#1a9850"
-    elif coverage >= 75:
-        return "#fee08b"
-    elif coverage >= 50:
-        return "#f46d43"
-    else:
-        return "#d73027"
-
-# Додаємо GeoJson з підсвіткою
 folium.GeoJson(
     geojson_data,
-    style_function=lambda f: {
-        "fillColor": color_by_coverage(f["properties"]["ukr_name"]),
-        "color":"black","weight":1,"fillOpacity":0.75
-    },
-    tooltip=GeoJsonTooltip(
-        fields=["ukr_name"],
+    style_function=style_function,
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name"],
         aliases=["Регіон:"],
         localize=True,
+        sticky=True,
         labels=True,
-        sticky=True
+        style=("background-color: white; color: black; font-weight: bold;"),
+        toLocaleString=True
     )
 ).add_to(m)
 
-# Додаємо підписи постійно над центрами регіонів
-for feature in geojson_data["features"]:
-    geom = shape(feature["geometry"])
-    lon, lat = geom.centroid.x, geom.centroid.y
+# Додаємо постійні підписи регіонів
+for region, coords in region_centers.items():
     folium.map.Marker(
-        location=[lat, lon],
+        location=coords,
         icon=folium.DivIcon(
-            html=f"""<div style="font-size:10pt; font-weight:bold; color:black">{feature['properties']['ukr_name']}</div>"""
+            html=f"""<div style="font-size:10pt; font-weight:bold; color:black">{region}</div>"""
         )
     ).add_to(m)
 
-# Легенда з кольоровими квадратиками і діапазоном чисел
+# Легенда з кольоровими квадратиками та діапазонами чисел
 legend_html = """
 <div style="
-position: absolute; bottom: 50px; left: 50px;
-width: 160px; height: 140px;
-background-color: white; border:2px solid grey; z-index:9999;
-font-size:12px; padding:5px;">
+position: fixed;
+bottom: 50px;
+left: 50px;
+width: 170px;
+height: 150px;
+background-color: white;
+border:2px solid grey;
+z-index:9999;
+font-size:14px;
+padding: 10px;
+">
 <i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%<br>
 <i style="background:#fee08b;width:15px;height:15px;display:inline-block"></i> 75–99%<br>
-<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 50–74%<br>
-<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> <50%<br>
+<i style="background:#f46d43;width:15px;height:15px;display:inline-block"></i> 51–74%<br>
+<i style="background:#d73027;width:15px;height:15px;display:inline-block"></i> ≤50%
 </div>
 """
 m.get_root().html.add_child(folium.Element(legend_html))
