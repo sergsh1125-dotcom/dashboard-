@@ -167,78 +167,59 @@ st.bar_chart(region_summary.sort_values("% забезпечення", ascending=
 # =====================================================
 # 8. КАРТА
 # =====================================================
-with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
-    geojson_data = json.load(f)
+import folium
+from shapely.geometry import shape
+from folium.features import GeoJsonTooltip
 
-region_name_map = {
-    "Київ": "Kyiv_city","Вінницька область": "Vinnytska","Волинська область": "Volynska",
-    "Дніпропетровська область": "Dnipropetrovska","Донецька область": "Donetska","Житомирська область": "Zhytomyrska",
-    "Закарпатська область": "Zakarpatska","Запорізька область": "Zaporizka","Івано-Франківська область": "Ivano-Frankivska",
-    "Київська область": "Kyivska","Кіровоградська область": "Kirovohradska","Луганська область": "Luhanska",
-    "Львівська область": "Lvivska","Миколаївська область": "Mykolaivska","Одеська область": "Odeska",
-    "Полтавська область": "Poltavska","Рівненська область": "Rivnenska","Сумська область": "Sumska",
-    "Тернопільська область": "Ternopilska","Харківська область": "Kharkivska","Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska","Черкаська область": "Cherkaska","Чернівецька область": "Chernivetska",
-    "Чернігівська область": "Chernihivska"
-}
-
-coverage_dict = {
-    eng_name: float(region_summary.loc[region_summary["region_name"]==ukr_name,"% забезпечення"].values[0])
-    if not region_summary.loc[region_summary["region_name"]==ukr_name].empty else 0
-    for ukr_name, eng_name in region_name_map.items()
-}
-
-def color_by_coverage(c):
-    if c>=100: return "#1a9850"
-    elif c>=75: return "#fee08b"
-    elif c>=50: return "#f46d43"
-    else: return "#d73027"
-
+# Створюємо карту
 m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron", control_scale=True)
 
-# Додаємо coverage у properties для tooltip
-for feature in geojson_data["features"]:
-    eng_name = feature["properties"]["name"]
-    feature["properties"]["coverage"] = coverage_dict.get(eng_name,0)
-    ukr_name_list = [k for k,v in region_name_map.items() if v==eng_name]
-    feature["properties"]["ukr_name"] = ukr_name_list[0] if ukr_name_list else eng_name
+# Обчислення кольору для кожного регіону
+def color_by_coverage(name):
+    coverage = coverage_dict.get(name, 0)
+    if selected_region != "Всі" and name != selected_region:
+        return "#c6dbef"  # затемнені регіони, якщо обраний один
+    if coverage >= 100:
+        return "#1a9850"
+    elif coverage >= 75:
+        return "#fee08b"
+    elif coverage >= 50:
+        return "#f46d43"
+    else:
+        return "#d73027"
 
-def style_function(feature):
-    coverage = feature["properties"]["coverage"]
-    if selected_region != "Всі" and feature["properties"]["ukr_name"] != selected_region:
-        return {"fillColor":"#cce5ff","color":"black","weight":1,"fillOpacity":0.4}
-    return {"fillColor": color_by_coverage(coverage),"color":"black","weight":1,"fillOpacity":0.75}
-
-tooltip = GeoJsonTooltip(
-    fields=["ukr_name","coverage"],
-    aliases=["Регіон:","% забезпечення:"],
-    localize=True,
-    sticky=True,
-    labels=True,
-    style="background-color: white; font-size:12px; padding:5px;"
-)
-
+# Додаємо GeoJson з підсвіткою
 folium.GeoJson(
     geojson_data,
-    style_function=style_function,
-    tooltip=tooltip
+    style_function=lambda f: {
+        "fillColor": color_by_coverage(f["properties"]["ukr_name"]),
+        "color":"black","weight":1,"fillOpacity":0.75
+    },
+    tooltip=GeoJsonTooltip(
+        fields=["ukr_name"],
+        aliases=["Регіон:"],
+        localize=True,
+        labels=True,
+        sticky=True
+    )
 ).add_to(m)
 
-# Постійнi надписи регіонів
+# Додаємо підписи постійно над центрами регіонів
 for feature in geojson_data["features"]:
-    coords = feature["properties"]["latlng"] if "latlng" in feature["properties"] else [49,32]
+    geom = shape(feature["geometry"])
+    lon, lat = geom.centroid.x, geom.centroid.y
     folium.map.Marker(
-        location=coords,
+        location=[lat, lon],
         icon=folium.DivIcon(
-            html=f"""<div style="font-size:10pt; font-weight:bold">{feature["properties"]["ukr_name"]}</div>"""
+            html=f"""<div style="font-size:10pt; font-weight:bold; color:black">{feature['properties']['ukr_name']}</div>"""
         )
     ).add_to(m)
 
-# Легенда з кольорами і цифрами
+# Легенда з кольоровими квадратиками і діапазоном чисел
 legend_html = """
 <div style="
-position: fixed; bottom: 50px; left: 50px;
-width: 150px; height: 140px;
+position: absolute; bottom: 50px; left: 50px;
+width: 160px; height: 140px;
 background-color: white; border:2px solid grey; z-index:9999;
 font-size:12px; padding:5px;">
 <i style="background:#1a9850;width:15px;height:15px;display:inline-block"></i> ≥100%<br>
@@ -249,7 +230,7 @@ font-size:12px; padding:5px;">
 """
 m.get_root().html.add_child(folium.Element(legend_html))
 
-st.subheader("Карта стану забезпечення засобами РХБ захмисту")
+st.subheader("Карта стану забезпечення засобами РХБ захисту")
 st_folium(m, width=1000, height=650)
 
 # =====================================================
