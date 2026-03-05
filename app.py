@@ -216,156 +216,136 @@ st.bar_chart(
 )
 
 # =====================================================
-# 8. КАРТА
+# 8. КАРТА (Оптимізована версія)
 # =====================================================
-
-with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
-    geojson_data = json.load(f)
-
-# відповідність назв
-region_name_map = {
-"Київ":"Kyiv_city",
-"Вінницька область":"Vinnytska",
-"Волинська область":"Volynska",
-"Дніпропетровська область":"Dnipropetrovska",
-"Донецька область":"Donetska",
-"Житомирська область":"Zhytomyrska",
-"Закарпатська область":"Zakarpatska",
-"Запорізька область":"Zaporizka",
-"Івано-Франківська область":"Ivano-Frankivska",
-"Київська область":"Kyivska",
-"Кіровоградська область":"Kirovohradska",
-"Луганська область":"Luhanska",
-"Львівська область":"Lvivska",
-"Миколаївська область":"Mykolaivska",
-"Одеська область":"Odeska",
-"Полтавська область":"Poltavska",
-"Рівненська область":"Rivnenska",
-"Сумська область":"Sumska",
-"Тернопільська область":"Ternopilska",
-"Харківська область":"Kharkivska",
-"Херсонська область":"Khersonska",
-"Хмельницька область":"Khmelnytska",
-"Черкаська область":"Cherkaska",
-"Чернівецька область":"Chernivetska",
-"Чернігівська область":"Chernihivska"
-}
-
-# словник % забезпечення
-coverage_dict = {}
-
-for ukr, eng in region_name_map.items():
-
-    row = region_summary[region_summary["region_name"] == ukr]
-
-    if not row.empty:
-        coverage_dict[eng] = float(row["% забезпечення"].values[0])
-    else:
-        coverage_dict[eng] = 0
-
-
-# шкала кольорів (5 рівнів)
-def color_by_coverage(c):
-
-    if c >= 100:
-        return "#1a9850"   # темно зелений
-    elif c >= 86:
-        return "#91cf60"   # світло зелений
-    elif c >= 71:
-        return "#fee08b"   # жовтий
-    elif c >= 51:
-        return "#fc8d59"   # помаранчевий
-    else:
-        return "#d73027"   # червоний
-
-
-# карта
-m = folium.Map(
-    location=[49,32],
-    zoom_start=6,
-    tiles="cartodbpositron"
-)
-
-
-# стиль регіону
-def style_function(feature):
-
-    name = feature["properties"]["name"]
-
-    coverage = coverage_dict.get(name,0)
-
-    # затемнення якщо обраний один регіон
-    if selected_region != "Всі":
-
-        eng_selected = region_name_map.get(selected_region)
-
-        if name != eng_selected:
-
-            return {
-                "fillColor":"#d9d9d9",
-                "color":"black",
-                "weight":1,
-                "fillOpacity":0.35
-            }
-
-    return {
-        "fillColor": color_by_coverage(coverage),
-        "color":"black",
-        "weight":1,
-        "fillOpacity":0.75
-    }
-
-
-# tooltip (назва + %)
-tooltip = folium.GeoJsonTooltip(
-    fields=["name"],
-    aliases=["Регіон:"],
-    labels=True,
-    sticky=True
-)
-
-folium.GeoJson(
-    geojson_data,
-    style_function=style_function,
-    tooltip=tooltip
-).add_to(m)
-
-
-# легенда (5 рівнів)
-legend_html = """
-<div style="
-position: fixed;
-bottom: 40px;
-left: 40px;
-width: 200px;
-background-color: white;
-border:2px solid grey;
-padding:10px;
-font-size:14px;
-z-index:9999;
-">
-
-<b>Рівень забезпечення</b><br><br>
-
-<span style="color:#1a9850;font-size:18px;">●</span> ≥100%<br>
-<span style="color:#91cf60;font-size:18px;">●</span> 86–99%<br>
-<span style="color:#fee08b;font-size:18px;">●</span> 71–85%<br>
-<span style="color:#fc8d59;font-size:18px;">●</span> 51–70%<br>
-<span style="color:#d73027;font-size:18px;">●</span> ≤50%
-
-</div>
-"""
-
-m.get_root().html.add_child(folium.Element(legend_html))
-
+import os
 
 st.subheader("Карта стану забезпечення засобами РХБ захисту")
 
-st_folium(
-    m,
-    width=1000,
-    height=650
-)
+# Перевірка наявності файлу GeoJSON
+geojson_path = "data/ukraine_regions.geojson"
+
+if not os.path.exists(geojson_path):
+    st.error(f"❌ Файл геоданих не знайдено за шляхом: {geojson_path}")
+else:
+    with open(geojson_path, "r", encoding="utf-8") as f:
+        geojson_data = json.load(f)
+
+    # 1. Підготовка даних для відображення
+    # Створюємо словник для швидкого пошуку: {EnglishName: {coverage, shortage, name_ukr}}
+    map_data_lookup = {}
+    for ukr_name, eng_name in region_name_map.items():
+        row = region_summary[region_summary["region_name"] == ukr_name]
+        if not row.empty:
+            map_data_lookup[eng_name] = {
+                "coverage": row["% забезпечення"].values[0],
+                "shortage": int(row["Нестача"].values[0]),
+                "total_q": int(row["total_quantity"].values[0]),
+                "ukr_name": ukr_name
+            }
+        else:
+            map_data_lookup[eng_name] = {
+                "coverage": 0,
+                "shortage": 0,
+                "total_q": 0,
+                "ukr_name": ukr_name
+            }
+
+    # 2. Збагачуємо GeoJSON даними для Tooltip
+    for feature in geojson_data["features"]:
+        eng_name = feature["properties"]["name"]
+        data = map_data_lookup.get(eng_name, {})
+        
+        # Додаємо властивості безпосередньо в об'єкт GeoJSON
+        feature["properties"]["ukr_label"] = data.get("ukr_name", eng_name)
+        feature["properties"]["coverage_val"] = f"{data.get('coverage', 0)}%"
+        feature["properties"]["shortage_val"] = f"{data.get('shortage', 0)} шт."
+        feature["properties"]["total_val"] = f"{data.get('total_q', 0)} шт."
+
+    # 3. Функція кольору
+    def color_by_coverage(c):
+        if c >= 100: return "#1a9850"   # Темно-зелений
+        if c >= 86:  return "#91cf60"   # Світло-зелений
+        if c >= 71:  return "#fee08b"   # Жовтий
+        if c >= 51:  return "#fc8d59"   # Помаранчевий
+        return "#d73027"                # Червоний
+
+    # 4. Стиль регіону
+    def style_function(feature):
+        eng_name = feature["properties"]["name"]
+        coverage = map_data_lookup.get(eng_name, {}).get("coverage", 0)
+        
+        # Логіка фокусу на обраному регіоні
+        fill_opacity = 0.75
+        if selected_region != "Всі":
+            eng_selected = region_name_map.get(selected_region)
+            if eng_name != eng_selected:
+                return {
+                    "fillColor": "#d9d9d9",
+                    "color": "#666666",
+                    "weight": 1,
+                    "fillOpacity": 0.2
+                }
+        
+        return {
+            "fillColor": color_by_coverage(coverage),
+            "color": "black",
+            "weight": 1.2,
+            "fillOpacity": fill_opacity
+        }
+
+    # 5. Створення карти
+    m = folium.Map(
+        location=[48.3, 31.1], 
+        zoom_start=6, 
+        tiles="cartodbpositron",
+        zoom_control=True
+    )
+
+    # Додаємо Tooltip з детальними даними
+    tooltip = folium.GeoJsonTooltip(
+        fields=["ukr_label", "coverage_val", "total_val", "shortage_val"],
+        aliases=["Регіон:", "Забезпечення:", "Наявність:", "Нестача:"],
+        localize=True,
+        sticky=False,
+        labels=True,
+        style="""
+            background-color: #F0EFEF;
+            border: 1px solid black;
+            border-radius: 3px;
+            box-shadow: 3px;
+        """
+    )
+
+    folium.GeoJson(
+        geojson_data,
+        style_function=style_function,
+        tooltip=tooltip
+    ).add_to(m)
+
+    # 6. Легенда з числовими діапазонами
+    legend_html = """
+    <div style="
+    position: fixed; 
+    bottom: 50px; left: 50px; width: 220px; height: 160px; 
+    background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+    padding: 10px;
+    border-radius: 5px;
+    ">
+    <b>Рівень забезпечення (%)</b><br>
+    <div style="margin-top: 8px;">
+        <i style="background: #1a9850; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 100% та більше<br>
+        <i style="background: #91cf60; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 86% – 99%<br>
+        <i style="background: #fee08b; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 71% – 85%<br>
+        <i style="background: #fc8d59; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 51% – 70%<br>
+        <i style="background: #d73027; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 0% – 50%
+    </div>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
+
+    # Відображення карти
+    st_folium(m, width="100%", height=600)
 # =====================================================
 # 9. ЕКСПОРТ
 # =====================================================
