@@ -322,21 +322,27 @@ else:
 
     folium.GeoJson(geojson_data, style_function=style_function, tooltip=tooltip).add_to(m)
 
-    # 7. Легенда з числовими діапазонами
+    # 7. Легенда з фіксованим кольором тексту
     legend_html = """
     <div style="
     position: fixed; 
-    bottom: 50px; left: 50px; width: 230px; height: 160px; 
-    background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
-    padding: 10px; border-radius: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    bottom: 50px; left: 50px; width: 230px; height: 165px; 
+    background-color: white; 
+    color: black; /* Явно вказуємо чорний колір тексту */
+    border: 2px solid grey; 
+    z-index: 9999; 
+    font-size: 14px;
+    padding: 10px; 
+    border-radius: 5px; 
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
     ">
-    <b>Рівень забезпечення (%)</b><br>
-    <div style="margin-top: 8px;">
-        <i style="background: #1a9850; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 100% та більше<br>
-        <i style="background: #91cf60; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 86% – 99%<br>
-        <i style="background: #fee08b; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 71% – 85%<br>
-        <i style="background: #fc8d59; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 51% – 70%<br>
-        <i style="background: #d73027; width: 12px; height: 12px; float: left; margin-right: 8px; border-radius: 50%;"></i> 0% – 50%
+    <b style="color: black;">Рівень забезпечення (%)</b><br>
+    <div style="margin-top: 8px; line-height: 1.6;">
+        <i style="background: #1a9850; width: 14px; height: 14px; float: left; margin-right: 10px; border-radius: 50%; border: 1px solid #333;"></i> 100% та більше<br>
+        <i style="background: #91cf60; width: 14px; height: 14px; float: left; margin-right: 10px; border-radius: 50%; border: 1px solid #333;"></i> 86% – 99%<br>
+        <i style="background: #fee08b; width: 14px; height: 14px; float: left; margin-right: 10px; border-radius: 50%; border: 1px solid #333;"></i> 71% – 85%<br>
+        <i style="background: #fc8d59; width: 14px; height: 14px; float: left; margin-right: 10px; border-radius: 50%; border: 1px solid #333;"></i> 51% – 70%<br>
+        <i style="background: #d73027; width: 14px; height: 14px; float: left; margin-right: 10px; border-radius: 50%; border: 1px solid #333;"></i> 0% – 50%
     </div>
     </div>
     """
