@@ -218,36 +218,20 @@ st.bar_chart(
 # =====================================================
 # 8. КАРТА
 # =====================================================
-
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
 region_name_map = {
-"Київ":"Kyiv_city",
-"Вінницька область":"Vinnytska",
-"Волинська область":"Volynska",
-"Дніпропетровська область":"Dnipropetrovska",
-"Донецька область":"Donetska",
-"Житомирська область":"Zhytomyrska",
-"Закарпатська область":"Zakarpatska",
-"Запорізька область":"Zaporizka",
-"Івано-Франківська область":"Ivano-Frankivska",
-"Київська область":"Kyivska",
-"Кіровоградська область":"Kirovohradska",
-"Луганська область":"Luhanska",
-"Львівська область":"Lvivska",
-"Миколаївська область":"Mykolaivska",
-"Одеська область":"Odeska",
-"Полтавська область":"Poltavska",
-"Рівненська область":"Rivnenska",
-"Сумська область":"Sumska",
-"Тернопільська область":"Ternopilska",
-"Харківська область":"Kharkivska",
-"Херсонська область":"Khersonska",
-"Хмельницька область":"Khmelnytska",
-"Черкаська область":"Cherkaska",
-"Чернівецька область":"Chernivetska",
-"Чернігівська область":"Chernihivska"
+    "Київ":"Kyiv_city","Вінницька область":"Vinnytska","Волинська область":"Volynska",
+    "Дніпропетровська область":"Dnipropetrovska","Донецька область":"Donetska",
+    "Житомирська область":"Zhytomyrska","Закарпатська область":"Zakarpatska",
+    "Запорізька область":"Zaporizka","Івано-Франківська область":"Ivano-Frankivska",
+    "Київська область":"Kyivska","Кіровоградська область":"Kirovohradska","Луганська область":"Luhanska",
+    "Львівська область":"Lvivska","Миколаївська область":"Mykolaivska","Одеська область":"Odeska",
+    "Полтавська область":"Poltavska","Рівненська область":"Rivnenska","Сумська область":"Sumska",
+    "Тернопільська область":"Ternopilska","Харківська область":"Kharkivska","Херсонська область":"Khersonska",
+    "Хмельницька область":"Khmelnytska","Черкаська область":"Cherkaska","Чернівецька область":"Chernivetska",
+    "Чернігівська область":"Chernihivska"
 }
 
 # словник % забезпечення
@@ -256,7 +240,7 @@ for ukr, eng in region_name_map.items():
     row = region_summary[region_summary["region_name"] == ukr]
     coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
 
-# шкала кольорів (5 рівнів)
+# кольори за 5 рівнями
 def color_by_coverage(c):
     if c >= 100: return "#1a9850"
     elif c >= 86: return "#91cf60"
@@ -272,6 +256,7 @@ def style_function(feature):
     name = feature["properties"]["name"]
     coverage = coverage_dict.get(name,0)
 
+    # затемнення неактивних регіонів
     if selected_region != "Всі":
         eng_selected = region_name_map.get(selected_region)
         if name != eng_selected:
@@ -279,7 +264,7 @@ def style_function(feature):
 
     return {"fillColor": color_by_coverage(coverage), "color":"black", "weight":1, "fillOpacity":0.75}
 
-# tooltip: назва + % забезпечення
+# tooltip: назва регіону + % забезпечення
 tooltip = folium.GeoJsonTooltip(
     fields=["name"],
     aliases=["Регіон:"],
@@ -287,44 +272,36 @@ tooltip = folium.GeoJsonTooltip(
     sticky=True,
     localize=True,
     toLocaleString=True,
-    style=("background-color: white; color: black; font-weight: bold;")
+    style=("background-color: white; color: black; font-weight: bold;"),
+    fmt=lambda val, feature: f"{val} – {coverage_dict.get(feature['properties']['name'],0)}%"
 )
 
 folium.GeoJson(
     geojson_data,
     style_function=style_function,
-    tooltip=folium.GeoJsonTooltip(
-        fields=["name"],
-        aliases=["Регіон:"],
-        labels=True,
-        sticky=True,
-        localize=True,
-        toLocaleString=True,
-        style=("background-color: white; color: black; font-weight: bold;")
-    )
+    tooltip=tooltip
 ).add_to(m)
 
-# легенда з кружками x3
+# компактна легенда з кружечками 18px
 legend_html = """
 <div style="
 position: fixed;
-bottom: 40px;
-left: 40px;
-width: 220px;
+bottom: 20px;
+left: 20px;
+width: 160px;
 background-color: white;
 border:2px solid grey;
 padding:10px;
-font-size:16px;
+font-size:12px;
 z-index:9999;
 ">
 
 <b>Рівень забезпечення</b><br><br>
-
-<span style="color:#1a9850;font-size:54px;">●</span> ≥100%<br>
-<span style="color:#91cf60;font-size:54px;">●</span> 86–99%<br>
-<span style="color:#fee08b;font-size:54px;">●</span> 71–85%<br>
-<span style="color:#fc8d59;font-size:54px;">●</span> 51–70%<br>
-<span style="color:#d73027;font-size:54px;">●</span> ≤50%
+<span style="color:#1a9850;font-size:18px;">●</span> ≥100%<br>
+<span style="color:#91cf60;font-size:18px;">●</span> 86–99%<br>
+<span style="color:#fee08b;font-size:18px;">●</span> 71–85%<br>
+<span style="color:#fc8d59;font-size:18px;">●</span> 51–70%<br>
+<span style="color:#d73027;font-size:18px;">●</span> ≤50%
 
 </div>
 """
