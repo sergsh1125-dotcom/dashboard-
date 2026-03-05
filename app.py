@@ -117,15 +117,27 @@ if selected_product != "Всі":
 # =====================================================
 region_summary = (
     filtered_df.groupby("region_name")
-    .agg(total_quantity=("quantity","sum"), total_required=("required_quantity","sum"))
+    .agg(
+        total_quantity=("quantity","sum"),
+        total_required=("required_quantity","sum")
+    )
     .reset_index()
 )
-region_summary["% забезпечення"] = region_summary.apply(
-    lambda row: round((row["total_quantity"]/row["total_required"])*100,1) if row["total_required"]>0 else 0,
-    axis=1
-)
-region_summary["Надлишок"] =
-region_summary["Надлишок"] =
+
+region_summary["% забезпечення"] = (
+    (region_summary["total_quantity"] / region_summary["total_required"])
+    .replace([float("inf")],0)
+    .fillna(0)
+    * 100
+).round(1)
+
+region_summary["Нестача"] = (
+    region_summary["total_required"] - region_summary["total_quantity"]
+).clip(lower=0)
+
+region_summary["Надлишок"] = (
+    region_summary["total_quantity"] - region_summary["total_required"]
+).clip(lower=0)
 
 # =====================================================
 # 5. KPI
