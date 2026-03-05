@@ -219,112 +219,153 @@ st.bar_chart(
 # 8. КАРТА
 # =====================================================
 
-st.subheader("Карта забезпечення")
-
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-region_map = {
-"Vinnytska":"Вінницька область",
-"Volynska":"Волинська область",
-"Dnipropetrovska":"Дніпропетровська область",
-"Donetska":"Донецька область",
-"Zhytomyrska":"Житомирська область",
-"Zakarpatska":"Закарпатська область",
-"Zaporizka":"Запорізька область",
-"Ivano-Frankivska":"Івано-Франківська область",
-"Kyivska":"Київська область",
-"Kyiv_city":"Київ",
-"Kirovohradska":"Кіровоградська область",
-"Luhanska":"Луганська область",
-"Lvivska":"Львівська область",
-"Mykolaivska":"Миколаївська область",
-"Odeska":"Одеська область",
-"Poltavska":"Полтавська область",
-"Rivnenska":"Рівненська область",
-"Sumska":"Сумська область",
-"Ternopilska":"Тернопільська область",
-"Kharkivska":"Харківська область",
-"Khersonska":"Херсонська область",
-"Khmelnytska":"Хмельницька область",
-"Cherkaska":"Черкаська область",
-"Chernivetska":"Чернівецька область",
-"Chernihivska":"Чернігівська область"
+# відповідність назв
+region_name_map = {
+"Київ":"Kyiv_city",
+"Вінницька область":"Vinnytska",
+"Волинська область":"Volynska",
+"Дніпропетровська область":"Dnipropetrovska",
+"Донецька область":"Donetska",
+"Житомирська область":"Zhytomyrska",
+"Закарпатська область":"Zakarpatska",
+"Запорізька область":"Zaporizka",
+"Івано-Франківська область":"Ivano-Frankivska",
+"Київська область":"Kyivska",
+"Кіровоградська область":"Kirovohradska",
+"Луганська область":"Luhanska",
+"Львівська область":"Lvivska",
+"Миколаївська область":"Mykolaivska",
+"Одеська область":"Odeska",
+"Полтавська область":"Poltavska",
+"Рівненська область":"Rivnenska",
+"Сумська область":"Sumska",
+"Тернопільська область":"Ternopilska",
+"Харківська область":"Kharkivska",
+"Херсонська область":"Khersonska",
+"Хмельницька область":"Khmelnytska",
+"Черкаська область":"Cherkaska",
+"Чернівецька область":"Chernivetska",
+"Чернігівська область":"Chernihivska"
 }
 
-coverage_dict = dict(
-zip(region_summary["region_name"], region_summary["% забезпечення"])
+# словник % забезпечення
+coverage_dict = {}
+
+for ukr, eng in region_name_map.items():
+
+    row = region_summary[region_summary["region_name"] == ukr]
+
+    if not row.empty:
+        coverage_dict[eng] = float(row["% забезпечення"].values[0])
+    else:
+        coverage_dict[eng] = 0
+
+
+# шкала кольорів (5 рівнів)
+def color_by_coverage(c):
+
+    if c >= 100:
+        return "#1a9850"   # темно зелений
+    elif c >= 86:
+        return "#91cf60"   # світло зелений
+    elif c >= 71:
+        return "#fee08b"   # жовтий
+    elif c >= 51:
+        return "#fc8d59"   # помаранчевий
+    else:
+        return "#d73027"   # червоний
+
+
+# карта
+m = folium.Map(
+    location=[49,32],
+    zoom_start=6,
+    tiles="cartodbpositron"
 )
 
-def color(c):
 
-    if c>=100:
-        return "#1a9850"
-    elif c>=75:
-        return "#fee08b"
-    elif c>=51:
-        return "#f46d43"
-    else:
-        return "#d73027"
-
+# стиль регіону
 def style_function(feature):
 
-    eng = feature["properties"]["name"]
-    ukr = region_map.get(eng,"")
+    name = feature["properties"]["name"]
 
-    percent = coverage_dict.get(ukr,0)
+    coverage = coverage_dict.get(name,0)
 
-    fill = color(percent)
+    # затемнення якщо обраний один регіон
+    if selected_region != "Всі":
 
-    if selected_region!="Всі" and ukr!=selected_region:
-        fill="#d9d9d9"
+        eng_selected = region_name_map.get(selected_region)
+
+        if name != eng_selected:
+
+            return {
+                "fillColor":"#d9d9d9",
+                "color":"black",
+                "weight":1,
+                "fillOpacity":0.35
+            }
 
     return {
-        "fillColor":fill,
+        "fillColor": color_by_coverage(coverage),
         "color":"black",
         "weight":1,
-        "fillOpacity":0.8
+        "fillOpacity":0.75
     }
 
-m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron")
 
-for feature in geojson_data["features"]:
+# tooltip (назва + %)
+tooltip = folium.GeoJsonTooltip(
+    fields=["name"],
+    aliases=["Регіон:"],
+    labels=True,
+    sticky=True
+)
 
-    eng = feature["properties"]["name"]
-    ukr = region_map.get(eng,"")
+folium.GeoJson(
+    geojson_data,
+    style_function=style_function,
+    tooltip=tooltip
+).add_to(m)
 
-    percent = coverage_dict.get(ukr,0)
 
-    tooltip = f"{ukr}<br>{percent}% забезпечення"
-
-    folium.GeoJson(
-        feature,
-        style_function=style_function,
-        tooltip=tooltip
-    ).add_to(m)
-
-legend = """
+# легенда (5 рівнів)
+legend_html = """
 <div style="
 position: fixed;
 bottom: 40px;
 left: 40px;
-background: white;
+width: 200px;
+background-color: white;
 border:2px solid grey;
 padding:10px;
 font-size:14px;
 z-index:9999;
 ">
-<div><span style="background:#1a9850;width:18px;height:18px;display:inline-block;margin-right:6px;"></span> ≥100%</div>
-<div><span style="background:#fee08b;width:18px;height:18px;display:inline-block;margin-right:6px;"></span> 75–99%</div>
-<div><span style="background:#f46d43;width:18px;height:18px;display:inline-block;margin-right:6px;"></span> 51–74%</div>
-<div><span style="background:#d73027;width:18px;height:18px;display:inline-block;margin-right:6px;"></span> ≤50%</div>
+
+<b>Рівень забезпечення</b><br><br>
+
+<span style="color:#1a9850;font-size:18px;">●</span> ≥100%<br>
+<span style="color:#91cf60;font-size:18px;">●</span> 86–99%<br>
+<span style="color:#fee08b;font-size:18px;">●</span> 71–85%<br>
+<span style="color:#fc8d59;font-size:18px;">●</span> 51–70%<br>
+<span style="color:#d73027;font-size:18px;">●</span> ≤50%
+
 </div>
 """
 
-m.get_root().html.add_child(folium.Element(legend))
+m.get_root().html.add_child(folium.Element(legend_html))
 
-st_folium(m, height=650, use_container_width=True)
 
+st.subheader("Карта стану забезпечення засобами РХБ захисту")
+
+st_folium(
+    m,
+    width=1000,
+    height=650
+)
 # =====================================================
 # 9. ЕКСПОРТ
 # =====================================================
