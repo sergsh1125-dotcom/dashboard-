@@ -222,7 +222,6 @@ st.bar_chart(
 with open("data/ukraine_regions.geojson","r",encoding="utf-8") as f:
     geojson_data = json.load(f)
 
-# відповідність назв
 region_name_map = {
 "Київ":"Kyiv_city",
 "Вінницька область":"Vinnytska",
@@ -253,119 +252,86 @@ region_name_map = {
 
 # словник % забезпечення
 coverage_dict = {}
-
 for ukr, eng in region_name_map.items():
-
     row = region_summary[region_summary["region_name"] == ukr]
-
-    if not row.empty:
-        coverage_dict[eng] = float(row["% забезпечення"].values[0])
-    else:
-        coverage_dict[eng] = 0
-
+    coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
 
 # шкала кольорів (5 рівнів)
 def color_by_coverage(c):
-
-    if c >= 100:
-        return "#1a9850"   # темно зелений
-    elif c >= 86:
-        return "#91cf60"   # світло зелений
-    elif c >= 71:
-        return "#fee08b"   # жовтий
-    elif c >= 51:
-        return "#fc8d59"   # помаранчевий
-    else:
-        return "#d73027"   # червоний
-
+    if c >= 100: return "#1a9850"
+    elif c >= 86: return "#91cf60"
+    elif c >= 71: return "#fee08b"
+    elif c >= 51: return "#fc8d59"
+    else: return "#d73027"
 
 # карта
-m = folium.Map(
-    location=[49,32],
-    zoom_start=6,
-    tiles="cartodbpositron"
-)
-
+m = folium.Map(location=[49,32], zoom_start=6, tiles="cartodbpositron")
 
 # стиль регіону
 def style_function(feature):
-
     name = feature["properties"]["name"]
-
     coverage = coverage_dict.get(name,0)
 
-    # затемнення якщо обраний один регіон
     if selected_region != "Всі":
-
         eng_selected = region_name_map.get(selected_region)
-
         if name != eng_selected:
+            return {"fillColor":"#d9d9d9","color":"black","weight":1,"fillOpacity":0.35}
 
-            return {
-                "fillColor":"#d9d9d9",
-                "color":"black",
-                "weight":1,
-                "fillOpacity":0.35
-            }
+    return {"fillColor": color_by_coverage(coverage), "color":"black", "weight":1, "fillOpacity":0.75}
 
-    return {
-        "fillColor": color_by_coverage(coverage),
-        "color":"black",
-        "weight":1,
-        "fillOpacity":0.75
-    }
-
-
-# tooltip (назва + %)
+# tooltip: назва + % забезпечення
 tooltip = folium.GeoJsonTooltip(
     fields=["name"],
     aliases=["Регіон:"],
     labels=True,
-    sticky=True
+    sticky=True,
+    localize=True,
+    toLocaleString=True,
+    style=("background-color: white; color: black; font-weight: bold;")
 )
 
 folium.GeoJson(
     geojson_data,
     style_function=style_function,
-    tooltip=tooltip
+    tooltip=folium.GeoJsonTooltip(
+        fields=["name"],
+        aliases=["Регіон:"],
+        labels=True,
+        sticky=True,
+        localize=True,
+        toLocaleString=True,
+        style=("background-color: white; color: black; font-weight: bold;")
+    )
 ).add_to(m)
 
-
-# легенда (5 рівнів)
+# легенда з кружками x3
 legend_html = """
 <div style="
 position: fixed;
 bottom: 40px;
 left: 40px;
-width: 200px;
+width: 220px;
 background-color: white;
 border:2px solid grey;
 padding:10px;
-font-size:14px;
+font-size:16px;
 z-index:9999;
 ">
 
 <b>Рівень забезпечення</b><br><br>
 
-<span style="color:#1a9850;font-size:18px;">●</span> ≥100%<br>
-<span style="color:#91cf60;font-size:18px;">●</span> 86–99%<br>
-<span style="color:#fee08b;font-size:18px;">●</span> 71–85%<br>
-<span style="color:#fc8d59;font-size:18px;">●</span> 51–70%<br>
-<span style="color:#d73027;font-size:18px;">●</span> ≤50%
+<span style="color:#1a9850;font-size:54px;">●</span> ≥100%<br>
+<span style="color:#91cf60;font-size:54px;">●</span> 86–99%<br>
+<span style="color:#fee08b;font-size:54px;">●</span> 71–85%<br>
+<span style="color:#fc8d59;font-size:54px;">●</span> 51–70%<br>
+<span style="color:#d73027;font-size:54px;">●</span> ≤50%
 
 </div>
 """
-
 m.get_root().html.add_child(folium.Element(legend_html))
 
-
 st.subheader("Карта стану забезпечення засобами РХБ захисту")
-
-st_folium(
-    m,
-    width=1000,
-    height=650
-)
+st_folium(m, width=1000, height=650)
 # =====================================================
 # 9. ЕКСПОРТ
 # =====================================================
