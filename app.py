@@ -20,7 +20,6 @@ if uploaded_file is None:
     st.stop()
 
 df = pd.read_excel(uploaded_file)
-
 df.columns = df.columns.str.strip().str.lower()
 
 required_columns = [
@@ -33,14 +32,13 @@ required_columns = [
 
 if not all(col in df.columns for col in required_columns):
     st.error("❌ У файлі відсутні необхідні колонки")
-    st.write("Знайдено:", df.columns.tolist())
+    st.write(df.columns.tolist())
     st.stop()
 
 # очистка
 df["region_name"] = df["region_name"].astype(str).str.strip()
 df["category"] = df["category"].astype(str).str.strip().str.lower()
 df["product_name"] = df["product_name"].fillna("").astype(str).str.strip()
-
 df = df[df["product_name"] != ""]
 
 for col in ["quantity", "required_quantity"]:
@@ -161,15 +159,17 @@ col3.metric("% забезпечення", f"{percent_total}%")
 # 7. ТАБЛИЦЯ
 # =====================================================
 
+region_summary["is_subunit"] = region_summary["region_name"].isin(subunits)
+
+region_summary = region_summary.sort_values(
+    by=["is_subunit", "region_name"]
+)
+
 display_table = region_summary.rename(columns={
     "region_name": "Регіон",
     "total_quantity": "Наявність",
     "total_required": "Потреба"
-})
-
-display_table["Тип"] = display_table["Регіон"].apply(
-    lambda x: "Підрозділ" if x in subunits else "Регіон"
-)
+}).drop(columns=["is_subunit"])
 
 st.subheader("Дані по регіонах")
 st.dataframe(display_table, use_container_width=True)
@@ -180,10 +180,13 @@ st.dataframe(display_table, use_container_width=True)
 
 st.subheader("Графік забезпечення (%)")
 
+chart_df = region_summary.sort_values(
+    by=["is_subunit", "% забезпечення"],
+    ascending=[True, False]
+)
+
 st.bar_chart(
-    region_summary
-    .sort_values("% забезпечення", ascending=False)
-    .set_index("region_name")["% забезпечення"]
+    chart_df.set_index("region_name")["% забезпечення"]
 )
 
 # =====================================================
@@ -195,7 +198,6 @@ st.subheader("Карта забезпечення")
 geojson_path = "data/ukraine_regions.geojson"
 
 region_name_map = {
-    "Київ": "Kyiv_city",
     "Київська область": "Kyivska",
     "Львівська область": "Lvivska",
     "Одеська область": "Odeska",
@@ -236,6 +238,15 @@ if os.path.exists(geojson_path):
         row = region_summary_map[region_summary_map["region_name"] == ukr]
         coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
 
+    for feature in geojson_data["features"]:
+        eng = feature["properties"]["name"]
+        coverage = coverage_dict.get(eng, 0)
+
+        feature["properties"]["coverage"] = coverage
+        feature["properties"]["name_ua"] = next(
+            (k for k, v in region_name_map.items() if v == eng), eng
+        )
+
     def color(c):
         if c >= 100:
             return "#1a9850"
@@ -251,12 +262,36 @@ if os.path.exists(geojson_path):
     folium.GeoJson(
         geojson_data,
         style_function=lambda f: {
-            "fillColor": color(coverage_dict.get(f["properties"]["name"], 0)),
+            "fillColor": color(f["properties"]["coverage"]),
             "color": "black",
             "weight": 1,
             "fillOpacity": 0.7
-        }
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=["name_ua", "coverage"],
+            aliases=["Регіон", "% забезпечення"]
+        )
     ).add_to(m)
+
+    legend = """
+    <div style="
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
+    background: white;
+    padding: 10px;
+    border: 2px solid grey;
+    z-index:9999;
+    font-size:14px;">
+    <b>Рівень забезпечення</b><br>
+    <i style="background:#1a9850;width:15px;height:15px;display:inline-block;"></i> ≥100%<br>
+    <i style="background:#fee08b;width:15px;height:15px;display:inline-block;"></i> 75–99%<br>
+    <i style="background:#f46d43;width:15px;height:15px;display:inline-block;"></i> 50–74%<br>
+    <i style="background:#d73027;width:15px;height:15px;display:inline-block;"></i> <50%
+    </div>
+    """
+
+    m.get_root().html.add_child(folium.Element(legend))
 
     st_folium(m, width="100%", height=600, key="main_map")
 
