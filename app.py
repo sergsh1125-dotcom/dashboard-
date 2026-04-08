@@ -272,7 +272,12 @@ for ukr, eng in region_name_map.items():
         }
     ).add_to(m)
 
-    st_folium(m, width="100%", height=600)
+    st_folium(
+        m,
+        width="100%",
+        height=600,
+        key=f"map_{selected_region}_{selected_category}_{selected_product}"
+)
 
 # =====================================================
 # 10. ЕКСПОРТ
