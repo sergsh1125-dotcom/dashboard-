@@ -112,7 +112,7 @@ st.dataframe(display_table, use_container_width=True)
 # 7. ГРАФІК
 # =====================================================
 
-st.subheader("Рейтинг регіонів")
+st.subheader("Графік стану забезпечення засобами РХБЗ (%)")
 
 st.bar_chart(
     region_summary
