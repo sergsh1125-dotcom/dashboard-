@@ -21,10 +21,8 @@ if uploaded_file is None:
 
 df = pd.read_excel(uploaded_file)
 
-# очистка назв колонок
 df.columns = df.columns.str.strip().str.lower()
 
-# перевірка колонок
 required_columns = [
     "region_name",
     "category",
@@ -38,12 +36,13 @@ if not all(col in df.columns for col in required_columns):
     st.write("Знайдено:", df.columns.tolist())
     st.stop()
 
-# очистка даних
+# очистка
 df["region_name"] = df["region_name"].astype(str).str.strip()
 df["category"] = df["category"].astype(str).str.strip().str.lower()
 df["product_name"] = df["product_name"].fillna("").astype(str).str.strip()
 
-# числа
+df = df[df["product_name"] != ""]
+
 for col in ["quantity", "required_quantity"]:
     df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -51,15 +50,11 @@ for col in ["quantity", "required_quantity"]:
 # 2. ДОВІДНИКИ
 # =====================================================
 
-allowed_categories = [
-    "спеціальна техніка",
-    "прилади рр",
-    "прилади хр",
-    "прилади рр_офіцери_рятувальники",
-    "прилади хр_офіцери-рятувальники",
-    "протигази",
-    "респіратори",
-    "захисний одяг"
+subunits = [
+    "ГМРЦШР",
+    'МРЦШР "Суми"',
+    'МРЦШР "Одеса"',
+    "САЗ ОРС ЦЗ"
 ]
 
 category_display = {
@@ -73,16 +68,6 @@ category_display = {
     "захисний одяг": "Захисний одяг"
 }
 
-# =====================================================
-# ПІДРОЗДІЛИ (НЕ ДЛЯ КАРТИ)
-# =====================================================
-
-subunits = [
-    "ГМРЦШР",
-    'МРЦШР "Суми"',
-    'МРЦШР "Одеса"',
-    "САЗ ОРС ЦЗ"
-]
 # =====================================================
 # 3. ФІЛЬТРИ
 # =====================================================
@@ -102,11 +87,10 @@ selected_category_display = st.sidebar.selectbox(
 reverse_map = {v: k for k, v in category_display.items()}
 selected_category = reverse_map.get(selected_category_display, "Всі")
 
-# динамічний список засобів
 if selected_category != "Всі":
-    product_options = df[df["category"] == selected_category]["product_name"].unique()
+    product_options = df[df["category"] == selected_category]["product_name"]
 else:
-    product_options = df["product_name"].unique()
+    product_options = df["product_name"]
 
 product_options = pd.Series(product_options).dropna().astype(str)
 
@@ -242,23 +226,25 @@ if os.path.exists(geojson_path):
     with open(geojson_path, "r", encoding="utf-8") as f:
         geojson_data = json.load(f)
 
-    coverage_dict = {}
-    # тільки справжні регіони (без підрозділів)
     region_summary_map = region_summary[
         ~region_summary["region_name"].isin(subunits)
-]
+    ]
 
-coverage_dict = {}
+    coverage_dict = {}
 
-for ukr, eng in region_name_map.items():
-    row = region_summary_map[region_summary_map["region_name"] == ukr]
-    coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
+    for ukr, eng in region_name_map.items():
+        row = region_summary_map[region_summary_map["region_name"] == ukr]
+        coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
 
     def color(c):
-        if c >= 100: return "#1a9850"
-        elif c >= 75: return "#fee08b"
-        elif c >= 50: return "#f46d43"
-        else: return "#d73027"
+        if c >= 100:
+            return "#1a9850"
+        elif c >= 75:
+            return "#fee08b"
+        elif c >= 50:
+            return "#f46d43"
+        else:
+            return "#d73027"
 
     m = folium.Map(location=[49, 32], zoom_start=6, tiles="cartodbpositron")
 
@@ -272,12 +258,7 @@ for ukr, eng in region_name_map.items():
         }
     ).add_to(m)
 
-    st_folium(
-        m,
-        width="100%",
-        height=600,
-        key=f"map_{selected_region}_{selected_category}_{selected_product}"
-)
+    st_folium(m, width="100%", height=600, key="main_map")
 
 # =====================================================
 # 10. ЕКСПОРТ
