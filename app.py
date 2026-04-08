@@ -41,7 +41,7 @@ if not all(col in df.columns for col in required_columns):
 # очистка даних
 df["region_name"] = df["region_name"].astype(str).str.strip()
 df["category"] = df["category"].astype(str).str.strip().str.lower()
-df["product_name"] = df["product_name"].astype(str).str.strip()
+df["product_name"] = df["product_name"].fillna("").astype(str).str.strip()
 
 # числа
 for col in ["quantity", "required_quantity"]:
@@ -108,9 +108,11 @@ if selected_category != "Всі":
 else:
     product_options = df["product_name"].unique()
 
+product_options = pd.Series(product_options).dropna().astype(str)
+
 selected_product = st.sidebar.selectbox(
     "Найменування засобу РХБЗ",
-    ["Всі"] + sorted(product_options)
+    ["Всі"] + sorted(product_options.unique())
 )
 
 # =====================================================
