@@ -74,6 +74,16 @@ category_display = {
 }
 
 # =====================================================
+# ПІДРОЗДІЛИ (НЕ ДЛЯ КАРТИ)
+# =====================================================
+
+subunits = [
+    "ГМРЦШР",
+    'МРЦШР "Суми"',
+    'МРЦШР "Одеса"',
+    "САЗ ОРС ЦЗ"
+]
+# =====================================================
 # 3. ФІЛЬТРИ
 # =====================================================
 
@@ -164,7 +174,9 @@ col3.metric("% забезпечення", f"{percent_total}%")
 # =====================================================
 # 7. ТАБЛИЦЯ
 # =====================================================
-
+display_table["Тип"] = display_table["Регіон"].apply(
+    lambda x: "Підрозділ" if x in subunits else "Регіон"
+)
 display_table = region_summary.rename(columns={
     "region_name": "Регіон",
     "total_quantity": "Наявність",
@@ -227,9 +239,16 @@ if os.path.exists(geojson_path):
         geojson_data = json.load(f)
 
     coverage_dict = {}
-    for ukr, eng in region_name_map.items():
-        row = region_summary[region_summary["region_name"] == ukr]
-        coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
+    # тільки справжні регіони (без підрозділів)
+    region_summary_map = region_summary[
+        ~region_summary["region_name"].isin(subunits)
+]
+
+coverage_dict = {}
+
+for ukr, eng in region_name_map.items():
+    row = region_summary_map[region_summary_map["region_name"] == ukr]
+    coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
 
     def color(c):
         if c >= 100: return "#1a9850"
