@@ -176,14 +176,16 @@ col3.metric("% забезпечення", f"{percent_total}%")
 # =====================================================
 # 7. ТАБЛИЦЯ
 # =====================================================
-display_table["Тип"] = display_table["Регіон"].apply(
-    lambda x: "Підрозділ" if x in subunits else "Регіон"
-)
+
 display_table = region_summary.rename(columns={
     "region_name": "Регіон",
     "total_quantity": "Наявність",
     "total_required": "Потреба"
 })
+
+display_table["Тип"] = display_table["Регіон"].apply(
+    lambda x: "Підрозділ" if x in subunits else "Регіон"
+)
 
 st.subheader("Дані по регіонах")
 st.dataframe(display_table, use_container_width=True)
