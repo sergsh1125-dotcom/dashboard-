@@ -287,7 +287,6 @@ if os.path.exists(geojson_path):
             aliases=["Регіон", "% забезпечення"]
         )
     ).add_to(m)
-        ).add_to(m)
 
     # --- Київ окремо ---
     kyiv_value = region_summary[
