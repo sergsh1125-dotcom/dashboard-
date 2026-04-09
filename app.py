@@ -275,9 +275,9 @@ if os.path.exists(geojson_path):
 
     legend = """
     <div style="
-    position: fixed;
-    bottom: 40px;
-    left: 40px;
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
     background: white;
     padding: 10px;
     border: 2px solid grey;
