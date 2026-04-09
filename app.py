@@ -220,7 +220,8 @@ region_name_map = {
     "Черкаська область": "Cherkaska",
     "Чернігівська область": "Chernihivska",
     "Чернівецька область": "Chernivetska",
-    "Житомирська область": "Zhytomyrska"
+    "Житомирська область": "Zhytomyrska",
+    "Київ": "Kyiv_city"
 }
 
 if os.path.exists(geojson_path):
