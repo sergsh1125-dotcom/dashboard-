@@ -236,13 +236,14 @@ region_name_map = {
     "Чернігівська область": "Chernihivska",
     "Чернівецька область": "Chernivetska",
     "Житомирська область": "Zhytomyrska"
-    }
+}
 
 if os.path.exists(geojson_path):
 
     with open(geojson_path, "r", encoding="utf-8") as f:
         geojson_data = json.load(f)
 
+    # тільки області (без підрозділів)
     region_summary_map = region_summary[
         ~region_summary["region_name"].isin(subunits)
     ]
@@ -251,13 +252,15 @@ if os.path.exists(geojson_path):
 
     for ukr, eng in region_name_map.items():
         row = region_summary_map[region_summary_map["region_name"] == ukr]
-        coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
+        if not row.empty:
+            coverage_dict[eng] = float(row["% забезпечення"].values[0])
+        else:
+            coverage_dict[eng] = 0
 
+    # додаємо дані в geojson
     for feature in geojson_data["features"]:
         eng = feature["properties"]["name"]
-        coverage = coverage_dict.get(eng, 0)
-
-        feature["properties"]["coverage"] = coverage
+        feature["properties"]["coverage"] = coverage_dict.get(eng, 0)
         feature["properties"]["name_ua"] = next(
             (k for k, v in region_name_map.items() if v == eng), eng
         )
@@ -293,7 +296,10 @@ if os.path.exists(geojson_path):
         region_summary["region_name"] == "Київ"
     ]["% забезпечення"]
 
-    kyiv_value = float(kyiv_value.values[0]) if not kyiv_value.empty else 0
+    if not kyiv_value.empty:
+        kyiv_value = float(kyiv_value.values[0])
+    else:
+        kyiv_value = 0
 
     folium.CircleMarker(
         location=[50.45, 30.52],
@@ -305,6 +311,7 @@ if os.path.exists(geojson_path):
         tooltip=f"Київ: {kyiv_value}%"
     ).add_to(m)
 
+    # легенда
     legend = """
     <div style="
     position: absolute;
@@ -326,7 +333,6 @@ if os.path.exists(geojson_path):
     m.get_root().html.add_child(folium.Element(legend))
 
     st_folium(m, width="100%", height=600, key="main_map")
-
 # =====================================================
 # 10. ЕКСПОРТ
 # =====================================================
