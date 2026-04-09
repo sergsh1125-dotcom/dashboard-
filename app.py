@@ -198,7 +198,7 @@ st.subheader("Карта забезпечення")
 geojson_path = "data/ukraine_regions.geojson"
 
 region_name_map = {
-    "Київська область": "Kyivska",
+    ""Київ": "Kyiv_city",
     "Львівська область": "Lvivska",
     "Одеська область": "Odeska",
     "Харківська область": "Kharkivska",
@@ -220,9 +220,8 @@ region_name_map = {
     "Черкаська область": "Cherkaska",
     "Чернігівська область": "Chernihivska",
     "Чернівецька область": "Chernivetska",
-    "Житомирська область": "Zhytomyrska",
-    "Київ": "Kyiv_city"
-}
+    "Житомирська область": "Zhytomyrska"
+    }
 
 if os.path.exists(geojson_path):
 
