@@ -287,22 +287,24 @@ if os.path.exists(geojson_path):
             aliases=["Регіон", "% забезпечення"]
         )
     ).add_to(m)
+        ).add_to(m)
+
     # --- Київ окремо ---
-kyiv_value = region_summary[
-    region_summary["region_name"] == "Київ"
-]["% забезпечення"]
+    kyiv_value = region_summary[
+        region_summary["region_name"] == "Київ"
+    ]["% забезпечення"]
 
-kyiv_value = float(kyiv_value.values[0]) if not kyiv_value.empty else 0
+    kyiv_value = float(kyiv_value.values[0]) if not kyiv_value.empty else 0
 
-folium.CircleMarker(
-    location=[50.45, 30.52],
-    radius=8,
-    color="black",
-    fill=True,
-    fill_color=color(kyiv_value),
-    fill_opacity=0.9,
-    tooltip=f"Київ: {kyiv_value}%"
-).add_to(m)
+    folium.CircleMarker(
+        location=[50.45, 30.52],
+        radius=8,
+        color="black",
+        fill=True,
+        fill_color=color(kyiv_value),
+        fill_opacity=0.9,
+        tooltip=f"Київ: {kyiv_value}%"
+    ).add_to(m)
 
     legend = """
     <div style="
