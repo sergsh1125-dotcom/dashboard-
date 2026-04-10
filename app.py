@@ -111,9 +111,11 @@ if selected_category != "Всі":
 
 if selected_product != "Всі":
     filtered_df = filtered_df[filtered_df["product_name"] ==# --- Київ окремо ---
-kyiv_value = region_summary[
-    region_summary["region_name"] == "Київ"
-]["% забезпечення"]
+kyiv_value = region_summary.loc[region_summary["region_name"] == "Київ", "% забезпечення"]
+if not kyiv_value.empty:
+    kyiv_value = float(kyiv_value.values[0])
+else:
+    kyiv_value = 0
 
 kyiv_value = float(kyiv_value.values[0]) if not kyiv_value.empty else 0
 
