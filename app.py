@@ -329,9 +329,9 @@ line-height: 1.6;
 
 </div>
 """
-    m.get_root().html.add_child(folium.Element(legend))
+m.get_root().html.add_child(folium.Element(legend))
 
-    st_folium(m, width="100%", height=600, key="main_map")
+st_folium(m, width="100%", height=600, key="main_map")
 
 # =====================================================
 # 10. ЕКСПОРТ
