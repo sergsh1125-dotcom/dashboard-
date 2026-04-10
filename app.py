@@ -291,22 +291,42 @@ if os.path.exists(geojson_path):
     ).add_to(m)
 
     legend = """
-    <div style="
-    position: absolute;
-    bottom: 30px;
-    left: 30px;
-    background: white;
-    padding: 10px;
-    border: 2px solid grey;
-    z-index:9999;
-    font-size:14px;">
-    <b>Рівень забезпечення</b><br>
-    <i style="background:#1a9850;width:15px;height:15px;display:inline-block;"></i> ≥100%<br>
-    <i style="background:#fee08b;width:15px;height:15px;display:inline-block;"></i> 75–99%<br>
-    <i style="background:#f46d43;width:15px;height:15px;display:inline-block;"></i> 50–74%<br>
-    <i style="background:#d73027;width:15px;height:15px;display:inline-block;"></i> <50%
-    </div>
-    """
+<div style="
+position: absolute;
+bottom: 30px;
+left: 30px;
+background: white;
+padding: 12px;
+border: 2px solid grey;
+z-index:9999;
+font-size:14px;
+border-radius:8px;
+box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+">
+<b>Рівень забезпечення (%)</b><br><br>
+
+<div>
+<span style="background:#1a9850;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
+≥ 100 %
+</div>
+
+<div>
+<span style="background:#fee08b;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
+75 – 99 %
+</div>
+
+<div>
+<span style="background:#f46d43;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
+50 – 74 %
+</div>
+
+<div>
+<span style="background:#d73027;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
+< 50 %
+</div>
+
+</div>
+"""
 
     m.get_root().html.add_child(folium.Element(legend))
 
