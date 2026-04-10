@@ -290,7 +290,7 @@ if os.path.exists(geojson_path):
         tooltip="Київ: " + str(kyiv_value) + "%"
     ).add_to(m)
 
-    legend = """
+legend = """
 <div style="
 position: absolute;
 bottom: 30px;
@@ -302,32 +302,33 @@ z-index:9999;
 font-size:14px;
 border-radius:8px;
 box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+line-height: 1.6;
 ">
-<b>Рівень забезпечення (%)</b><br><br>
 
-<div>
-<span style="background:#1a9850;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
-≥ 100 %
+<b>Рівень забезпечення (%)</b><br>
+
+<div style="display:flex;align-items:center;">
+<div style="background:#1a9850;width:15px;height:15px;margin-right:8px;"></div>
+<span>≥ 100 %</span>
 </div>
 
-<div>
-<span style="background:#fee08b;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
-75 – 99 %
+<div style="display:flex;align-items:center;">
+<div style="background:#fee08b;width:15px;height:15px;margin-right:8px;"></div>
+<span>75 – 99 %</span>
 </div>
 
-<div>
-<span style="background:#f46d43;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
-50 – 74 %
+<div style="display:flex;align-items:center;">
+<div style="background:#f46d43;width:15px;height:15px;margin-right:8px;"></div>
+<span>50 – 74 %</span>
 </div>
 
-<div>
-<span style="background:#d73027;width:15px;height:15px;display:inline-block;margin-right:6px;"></span>
-< 50 %
+<div style="display:flex;align-items:center;">
+<div style="background:#d73027;width:15px;height:15px;margin-right:8px;"></div>
+<span>< 50 %</span>
 </div>
 
 </div>
 """
-
     m.get_root().html.add_child(folium.Element(legend))
 
     st_folium(m, width="100%", height=600, key="main_map")
