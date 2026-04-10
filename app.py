@@ -310,7 +310,18 @@ if os.path.exists(geojson_path):
 
     m.get_root().html.add_child(folium.Element(legend))
 
-    st_folium(m, width="100%", height=600, key="main_map")
+    col_map, col_legend = st.columns([4, 1])
+
+with col_map:
+    st_folium(m, width="100%", height=600)
+
+with col_legend:
+    st.markdown("### Легенда")
+    
+    st.markdown("🟩 **≥ 100 %**")
+    st.markdown("🟨 **75 – 99 %**")
+    st.markdown("🟧 **50 – 74 %**")
+    st.markdown("🟥 **< 50 %**")
 
 # =====================================================
 # 10. ЕКСПОРТ
