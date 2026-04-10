@@ -307,9 +307,7 @@ if os.path.exists(geojson_path):
     <i style="background:#d73027;width:15px;height:15px;display:inline-block;"></i> <50%
     </div>
     """
-
-    m.get_root().html.add_child(folium.Element(legend))
-
+   
     col_map, col_legend = st.columns([4, 1])
 
 with col_map:
