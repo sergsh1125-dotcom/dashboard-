@@ -192,156 +192,78 @@ st.bar_chart(
 )
 
 # =====================================================
-# 9. КАРТА
+# 6. КАРТА З ЛЕГЕНДОЮ
 # =====================================================
+st.write("---")
+st.subheader("🗺️ Карта стану забезпечення засобами РХБЗ в регіонах")
 
-st.subheader("Карта забезпечення")
-
-geojson_path = "data/ukraine_regions.geojson"
+def get_color(c):
+    if c >= 100: return "#1a9850"
+    if c >= 86:  return "#91cf60"
+    if c >= 71:  return "#fee08b"
+    if c >= 51:  return "#fc8d59"
+    return "#d73027"
 
 region_name_map = {
-    "Київ": "Kyiv_city",
-    "Львівська область": "Lvivska",
-    "Одеська область": "Odeska",
-    "Харківська область": "Kharkivska",
-    "Дніпропетровська область": "Dnipropetrovska",
-    "Полтавська область": "Poltavska",
-    "Сумська область": "Sumska",
-    "Вінницька область": "Vinnytska",
-    "Волинська область": "Volynska",
-    "Закарпатська область": "Zakarpatska",
-    "Запорізька область": "Zaporizka",
-    "Івано-Франківська область": "Ivano-Frankivska",
-    "Кіровоградська область": "Kirovohradska",
-    "Луганська область": "Luhanska",
-    "Миколаївська область": "Mykolaivska",
-    "Рівненська область": "Rivnenska",
-    "Тернопільська область": "Ternopilska",
-    "Херсонська область": "Khersonska",
-    "Хмельницька область": "Khmelnytska",
-    "Черкаська область": "Cherkaska",
-    "Чернігівська область": "Chernihivska",
-    "Чернівецька область": "Chernivetska",
-    "Житомирська область": "Zhytomyrska"
+    "Київ": ["Kyiv_city", "Kyiv"], "Вінницька область": ["Vinnytska"], "Волинська область": ["Volynska"],
+    "Дніпропетровська область": ["Dnipropetrovska"], "Донецька область": ["Donetska"],
+    "Житомирська область": ["Zhytomyrska"], "Закарпатська область": ["Zakarpatska"],
+    "Запорізька область": ["Zaporizka"], "Івано-Франківська область": ["Ivano-Frankivska"],
+    "Київська область": ["Kyivska"], "Кіровоградська область": ["Kirovohradska"],
+    "Луганська область": ["Luhanska"], "Львівська область": ["Lvivska"],
+    "Миколаївська область": ["Mykolaivska"], "Одеська область": ["Odeska"],
+    "Полтавська область": ["Poltavska"], "Рівненська область": ["Rivnenska"],
+    "Сумська область": ["Sumska"], "Тернопільська область": ["Ternopilska"],
+    "Харківська область": ["Kharkivska"], "Херсонська область": ["Khersonska"],
+    "Хмельницька область": ["Khmelnytska"], "Черкаська область": ["Cherkaska"],
+    "Чернівецька область": ["Chernivetska"], "Чернігівська область": ["Chernihivska"]
 }
 
-if os.path.exists(geojson_path):
-
-    with open(geojson_path, "r", encoding="utf-8") as f:
+if os.path.exists(GEOJSON_PATH):
+    with open(GEOJSON_PATH, "r", encoding="utf-8") as f:
         geojson_data = json.load(f)
 
-    region_summary_map = region_summary[
-        ~region_summary["region_name"].isin(subunits)
-    ]
-
-    coverage_dict = {}
-
-    for ukr, eng in region_name_map.items():
-        row = region_summary_map[region_summary_map["region_name"] == ukr]
-        coverage_dict[eng] = float(row["% забезпечення"].values[0]) if not row.empty else 0
+    map_lookup = {row["region_name"]: row for _, row in region_summary.iterrows()}
 
     for feature in geojson_data["features"]:
-        eng = feature["properties"]["name"]
-        feature["properties"]["coverage"] = coverage_dict.get(eng, 0)
-        feature["properties"]["name_ua"] = next(
-            (k for k, v in region_name_map.items() if v == eng), eng
-        )
+        eng_n = feature["properties"]["name"]
+        ukr_n = next((k for k, v in region_name_map.items() if eng_n in v), eng_n)
+        d = map_lookup.get(ukr_n, {"% забезпечення": 0, "Нестача": 0})
+        feature["properties"]["ukr_label"] = ukr_n
+        feature["properties"]["coverage"] = f"{d['% забезпечення']}%"
+        feature["properties"]["shortage"] = f"{int(d['Нестача'])} од."
+        feature["properties"]["val"] = d["% забезпечення"]
 
-    def color(c):
-        if c >= 100:
-            return "#1a9850"
-        elif c >= 75:
-            return "#fee08b"
-        elif c >= 50:
-            return "#f46d43"
-        else:
-            return "#d73027"
+    def style_func(feature):
+        val = feature["properties"]["val"]
+        u_name = feature["properties"]["ukr_label"]
+        opac = 0.75
+        if selected_region != "Всі" and u_name != selected_region: opac = 0.1
+        return {"fillColor": get_color(val), "color": "black", "weight": 1.2, "fillOpacity": opac}
 
-    m = folium.Map(location=[49, 32], zoom_start=6, tiles="cartodbpositron")
+    col_m, col_l = st.columns([8, 2])
+    with col_m:
+        m = folium.Map(location=[48.3, 31.1], zoom_start=6, tiles="cartodbpositron")
+        folium.GeoJson(geojson_data, style_function=style_func,
+                       tooltip=folium.GeoJsonTooltip(fields=["ukr_label", "coverage", "shortage"], 
+                       aliases=["Регіон:", "Забезп.:", "Нестача:"])).add_to(m)
+        
+        k_d = map_lookup.get("Київ", {"% забезпечення": 0, "Нестача": 0})
+        folium.CircleMarker(location=[50.4501, 30.5234], radius=10, color="black", weight=2, 
+                            fill=True, fill_color=get_color(k_d["% забезпечення"]), fill_opacity=0.9,
+                            tooltip=f"Місто Київ: {k_d['% забезпечення']}%").add_to(m)
+        st_folium(m, width="100%", height=600, key="map_update")
 
-    folium.GeoJson(
-        geojson_data,
-        style_function=lambda f: {
-            "fillColor": color(f["properties"]["coverage"]),
-            "color": "black",
-            "weight": 1,
-            "fillOpacity": 0.7
-        },
-        tooltip=folium.GeoJsonTooltip(
-            fields=["name_ua", "coverage"],
-            aliases=["Регіон", "% забезпечення"]
-        )
-    ).add_to(m)
-
-    # Київ
-    kyiv_series = region_summary.loc[
-        region_summary["region_name"] == "Київ", "% забезпечення"
-    ]
-
-    kyiv_value = float(kyiv_series.iloc[0]) if len(kyiv_series) > 0 else 0
-
-    folium.CircleMarker(
-        location=[50.45, 30.52],
-        radius=8,
-        color="black",
-        fill=True,
-        fill_color=color(kyiv_value),
-        fill_opacity=0.9,
-        tooltip="Київ: " + str(kyiv_value) + "%"
-    ).add_to(m)
-
-from branca.element import MacroElement
-from jinja2 import Template
-
-legend = MacroElement()
-legend._template = Template("""
-{% macro html(this, kwargs) %}
-
-<div style="
-position: fixed;
-bottom: 40px;
-left: 40px;
-width: 180px;
-background-color: white;
-border: 2px solid grey;
-z-index:9999;
-font-size:14px;
-padding: 10px;
-border-radius:8px;
-box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
-">
-
-<b>Рівень забезпечення (%)</b><br><br>
-
-<div style="display:flex;align-items:center;">
-<div style="background:#1a9850;width:15px;height:15px;margin-right:8px;"></div>
-<span>≥ 100 %</span>
-</div>
-
-<div style="display:flex;align-items:center;">
-<div style="background:#fee08b;width:15px;height:15px;margin-right:8px;"></div>
-<span>75 – 99 %</span>
-</div>
-
-<div style="display:flex;align-items:center;">
-<div style="background:#f46d43;width:15px;height:15px;margin-right:8px;"></div>
-<span>50 – 74 %</span>
-</div>
-
-<div style="display:flex;align-items:center;">
-<div style="background:#d73027;width:15px;height:15px;margin-right:8px;"></div>
-<span>< 50 %</span>
-</div>
-
-</div>
-
-{% endmacro %}
-""")
-
-m.get_root().add_child(legend)
-
-st_folium(m, width="100%", height=600, key="main_map")
-
+    with col_l:
+        st.markdown("""
+        <div style="background-color: white; padding: 15px; border: 2px solid #333; border-radius: 10px; color: black;">
+            <b style="font-size: 16px;">Легенда (%)</b><br><br>
+            <div style="margin-bottom: 8px;"><span style="color: #1a9850; font-size: 20px;">●</span> 100%+</div>
+            <div style="margin-bottom: 8px;"><span style="color: #91cf60; font-size: 20px;">●</span> 86% – 99%</div>
+            <div style="margin-bottom: 8px;"><span style="color: #fee08b; font-size: 20px;">●</span> 71% – 85%</div>
+            <div style="margin-bottom: 8px;"><span style="color: #fc8d59; font-size: 20px;">●</span> 51% – 70%</div>
+            <div style="margin-bottom: 8px;"><span style="color: #d73027; font-size: 20px;">●</span> 0% – 50%</div>
+        </div>""", unsafe_allow_html=True)
 # =====================================================
 # 10. ЕКСПОРТ
 # =====================================================
