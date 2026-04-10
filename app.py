@@ -290,22 +290,28 @@ if os.path.exists(geojson_path):
         tooltip="Київ: " + str(kyiv_value) + "%"
     ).add_to(m)
 
-legend = """
+from branca.element import MacroElement
+from jinja2 import Template
+
+legend = MacroElement()
+legend._template = Template("""
+{% macro html(this, kwargs) %}
+
 <div style="
-position: absolute;
-bottom: 30px;
-left: 30px;
-background: white;
-padding: 12px;
+position: fixed;
+bottom: 40px;
+left: 40px;
+width: 180px;
+background-color: white;
 border: 2px solid grey;
 z-index:9999;
 font-size:14px;
+padding: 10px;
 border-radius:8px;
-box-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-line-height: 1.6;
+box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
 ">
 
-<b>Рівень забезпечення (%)</b><br>
+<b>Рівень забезпечення (%)</b><br><br>
 
 <div style="display:flex;align-items:center;">
 <div style="background:#1a9850;width:15px;height:15px;margin-right:8px;"></div>
@@ -328,8 +334,11 @@ line-height: 1.6;
 </div>
 
 </div>
-"""
-m.get_root().html.add_child(folium.Element(legend))
+
+{% endmacro %}
+""")
+
+m.get_root().add_child(legend)
 
 st_folium(m, width="100%", height=600, key="main_map")
 
